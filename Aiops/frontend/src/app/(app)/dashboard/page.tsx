@@ -12,12 +12,12 @@ import { useAIOpsStore } from "@/lib/store";
 import { useAgents, type AgentSummary } from "@/lib/useAgents";
 import { useLottieLoader } from "@/lib/useLottieLoader";
 import { AlertCircle, AlertTriangle, ArrowRight, Bot, CheckCircle2, Maximize2, MessageCircle, Minimize2, Pause, Play, Square, User } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
-import Link from "next/link";
 import topAnimation from "../../../../Guy talking to Robot _ AI Help.json";
 
-const GROQ_API_KEY = "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";
+const GROQ_API_KEY = "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";
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODEL = "openai/gpt-oss-120b";
 
