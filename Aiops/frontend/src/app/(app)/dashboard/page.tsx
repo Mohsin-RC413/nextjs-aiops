@@ -213,6 +213,7 @@ export default function DashboardPage() {
   const [draftMessage, setDraftMessage] = useState("");
   const [typingAnimation, setTypingAnimation] = useState<{ messageId: number; text: string } | null>(null);
   const [isTyping, setIsTyping] = useState(false);
+  const [awsSessionId, setAwsSessionId] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const onlineAgentCount = useMemo(() => agents.filter((a) => a.running).length, [agents]);
   const totalAgentCount = agents.length;
@@ -223,6 +224,60 @@ export default function DashboardPage() {
   const agentMixCardRef = useRef<HTMLDivElement | null>(null);
   const agentMixHoverRef = useRef<"online" | "offline" | null>(null);
 
+  const formatServiceNowIncident = (incident: Record<string, unknown>): string => {
+    const number = incident.number ?? incident.sys_id ?? "Unknown ID";
+    const short = incident.short_description ?? incident.description ?? "";
+    const status = incident.status ?? incident.state;
+    const priority = incident.priority ?? incident.urgency;
+    const openedAt = incident.opened_at;
+    const meta: string[] = [];
+    if (status) meta.push(`status ${status}`);
+    if (priority) meta.push(`priority ${priority}`);
+    if (typeof openedAt === "string" && isProbablyDateString(openedAt)) {
+      meta.push(`opened ${new Date(openedAt).toLocaleString()}`);
+    }
+    const metaLabel = meta.length ? ` (${meta.join(" | ")})` : "";
+    const description = short ? ` — ${short}` : "";
+    return `- ${String(number)}${metaLabel}${description}`;
+  };
+
+  const formatServiceNowChatResponse = (payload: unknown): string | null => {
+    if (!payload || typeof payload !== "object") return null;
+    const root = payload as Record<string, unknown>;
+    const intent = typeof root.intent === "string" ? root.intent : null;
+    const result =
+      typeof root.result === "object" && root.result !== null ? (root.result as Record<string, unknown>) : null;
+    const incidents = Array.isArray((result as any)?.incidents) ? ((result as any).incidents as any[]) : null;
+    const countRaw =
+      (result as any)?.today_count ??
+      (result as any)?.count ??
+      (result as any)?.total_incidents ??
+      (Array.isArray(incidents) ? incidents.length : null);
+    if (incidents && incidents.length) {
+      const scope = intent && intent.includes("today") ? "today" : "";
+      const count = typeof countRaw === "number" ? countRaw : incidents.length;
+      const header = `I found ${count} incident${count === 1 ? "" : "s"}${scope ? ` ${scope}` : ""}.`;
+      const lines = incidents.map((incident) => formatServiceNowIncident((incident ?? {}) as Record<string, unknown>));
+      return [header, ...lines].filter(Boolean).join("\n");
+    }
+    const resultMessage = (result as any)?.message;
+    if (typeof resultMessage === "string") {
+      return resultMessage;
+    }
+    const rootMessage = (root as any)?.message;
+    if (typeof rootMessage === "string") {
+      return rootMessage;
+    }
+    if (result && typeof result === "object") {
+      const simple = result as Record<string, unknown>;
+      const summary = simple.summary ?? simple.detail;
+      if (typeof summary === "string") {
+        return summary;
+      }
+    }
+    return null;
+  };
+
   const formatMuleResponse = (raw: string): string => {
     if (!raw) return "No response from agent.";
     try {
@@ -232,13 +287,38 @@ export default function DashboardPage() {
       const items = Array.from(doc.querySelectorAll("li")).map((li) => li.textContent?.trim()).filter(Boolean);
       if (items.length) {
         const heading = title ? `${title}` : "Agent response";
-        return [heading, ...items.map((item) => `• ${item}`)].join("\n");
+        return [heading, ...items.map((item) => `- ${item}`)].join("\n");
       }
       const bodyText = doc.body.textContent ?? "";
       return bodyText.trim() || raw;
     } catch {
       return raw;
     }
+  };
+  const formatMuleChatResponse = (payload: unknown): string | null => {
+    if (typeof payload === "string") return formatMuleResponse(payload);
+    if (Array.isArray(payload)) {
+      const lines = payload
+        .map((item) => {
+          if (typeof item === "string") return formatMuleResponse(item);
+          try {
+            return JSON.stringify(item ?? "");
+          } catch {
+            return String(item);
+          }
+        })
+        .filter(Boolean);
+      return lines.join("\n");
+    }
+    if (payload && typeof payload === "object") {
+      const messageKey = ["reply", "message", "response", "output", "answer", "text", "result"].find((key) =>
+        typeof (payload as Record<string, unknown>)[key] === "string",
+      );
+      if (messageKey) {
+        return formatMuleResponse(String((payload as Record<string, unknown>)[messageKey]));
+      }
+    }
+    return null;
   };
   const serializeAgentResponse = (payload: unknown): string => {
     if (payload === null || payload === undefined) return "No response from agent.";
@@ -469,6 +549,7 @@ export default function DashboardPage() {
       (chatAgent.enterprise ?? chatAgent.type ?? "").toLowerCase().includes("mule");
     const isServiceNowAgent =
       (chatAgent.enterprise ?? chatAgent.type ?? "").toLowerCase().includes("servicenow");
+    const isAws = isAwsAgent(chatAgent);
     const port = chatAgent.port;
     const userMessage = {
       speaker: "You",
@@ -483,7 +564,33 @@ export default function DashboardPage() {
 
     try {
       let data: any = null;
-      if (isMuleAgent) {
+      if (isAws) {
+        const payload: { message: string; session_id?: string } = {
+          message: userMessage.text,
+        };
+        if (awsSessionId) {
+          payload.session_id = awsSessionId;
+        }
+        const response = await fetch("http://localhost:8020/invoke", {
+          method: "POST",
+          headers: {
+            accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+        const awsJson = await response.json().catch(() => null);
+        console.log("AWS chat response", { status: response.status, data: awsJson });
+        data = awsJson;
+        if (!response.ok) {
+          const msg = awsJson?.message ?? "Unable to reach AWS agent";
+          throw new Error(msg);
+        }
+        const newSessionId = awsJson?.session_id;
+        if (newSessionId) {
+          setAwsSessionId(newSessionId);
+        }
+      } else if (isMuleAgent) {
         if (!port) {
           throw new Error("Agent port is unavailable");
         }
@@ -549,16 +656,17 @@ export default function DashboardPage() {
         }
       }
       await new Promise((resolve) => setTimeout(resolve, 500));
-      const rawReply = data?.reply ?? data?.message ?? data ?? "Sorry, I could not respond right now.";
-      const llmReply = await getGroqResponse(userMessage.text, data);
+      const serviceNowReply = isServiceNowAgent ? formatServiceNowChatResponse(data) : null;
+      const muleReply = isMuleAgent ? formatMuleChatResponse(data) : null;
+      const rawReply = serviceNowReply ?? muleReply ?? extractAgentReply(data);
+      const llmReply =
+        isAws || isServiceNowAgent || isMuleAgent ? null : await getGroqResponse(userMessage.text, data);
       if (llmReply) {
         console.log("Groq LLM chat response", llmReply);
-      } else {
+      } else if (!isAws) {
         console.log("Groq LLM chat response unavailable");
       }
-      const finalText =
-        llmReply ??
-        (typeof rawReply === "string" ? rawReply : "I couldn't generate a natural-language summary right now.");
+      const finalText = isAws ? rawReply : llmReply ?? rawReply;
       setChatMessages((prev) => [
         ...prev,
         { speaker: `${chatAgent.name}`, text: finalText, id: Date.now() + 3 },
@@ -786,8 +894,13 @@ export default function DashboardPage() {
       setTypingAnimation(null);
       setIsTyping(false);
       setIsChatMaximized(false);
+      setAwsSessionId(null);
     }
   }, [chatAgent]);
+
+  useEffect(() => {
+    setAwsSessionId(null);
+  }, [chatAgent?.agentId]);
 
   useEffect(() => {
     if (!chatAgent) return;
@@ -903,6 +1016,33 @@ export default function DashboardPage() {
     [agents, showAllAgents],
   );
 
+  const extractAgentReply = (data: unknown): string => {
+    if (data === null || data === undefined) {
+      return "Sorry, I could not respond right now.";
+    }
+    if (typeof data === "string") return data;
+    if (Array.isArray(data)) {
+      return data.map((item) => (typeof item === "string" ? item : JSON.stringify(item ?? ""))).join("\n");
+    }
+    if (typeof data === "object") {
+      const payload = data as Record<string, unknown>;
+      const candidateKeys = ["reply", "message", "response", "output", "answer", "text", "result"];
+      for (const key of candidateKeys) {
+        const value = payload[key];
+        if (typeof value === "string") return value;
+        if (Array.isArray(value)) {
+          return value.map((item) => (typeof item === "string" ? item : JSON.stringify(item ?? ""))).join("\n");
+        }
+      }
+      try {
+        return JSON.stringify(payload);
+      } catch {
+        return "Sorry, I could not respond right now.";
+      }
+    }
+    return String(data);
+  };
+
   const scrollTo = (id: string) => {
     const el = document.getElementById(id);
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -911,6 +1051,10 @@ export default function DashboardPage() {
   const resolvedCount = backendData?.totalIncidents ?? 0;
   const incidentKey = useCallback(
     (incident: BackendIncident, index?: number) => incident.sys_id ?? incident.number ?? `idx-${index ?? 0}`,
+    [],
+  );
+  const isAwsAgent = useCallback(
+    (agent: AgentSummary) => (agent.enterprise ?? agent.name ?? "").toLowerCase().includes("aws"),
     [],
   );
   const recentClosed = useMemo(() => {
@@ -1373,24 +1517,28 @@ export default function DashboardPage() {
                     <div className="flex items-center justify-between">
                       <p className="text-sm text-white/70">Real-time: {agent.running ? 'Running' : 'Stopped'}</p>
                       <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-none bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-[0_8px_20px_rgba(16,185,129,0.35)] transition hover:shadow-[0_10px_24px_rgba(16,185,129,0.42)] hover:scale-[1.01] rounded-full px-4 disabled:opacity-50 disabled:shadow-none disabled:scale-100"
-                          onClick={() => requestToggle(agent.name, 'start')}
-                          disabled={agent.running}
-                        >
-                          <Play className="mr-1 h-4 w-4" /> Start
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-none bg-gradient-to-r from-rose-500 to-rose-600 text-white shadow-[0_8px_20px_rgba(244,63,94,0.35)] transition hover:shadow-[0_10px_24px_rgba(244,63,94,0.42)] hover:scale-[1.01] rounded-full px-4 disabled:opacity-50 disabled:shadow-none disabled:scale-100"
-                          onClick={() => requestToggle(agent.name, 'stop')}
-                          disabled={!agent.running}
-                        >
-                          <Pause className="mr-1 h-4 w-4" /> Stop
-                        </Button>
+                        {!isAwsAgent(agent) && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-none bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-[0_8px_20px_rgba(16,185,129,0.35)] transition hover:shadow-[0_10px_24px_rgba(16,185,129,0.42)] hover:scale-[1.01] rounded-full px-4 disabled:opacity-50 disabled:shadow-none disabled:scale-100"
+                              onClick={() => requestToggle(agent.name, 'start')}
+                              disabled={agent.running}
+                            >
+                              <Play className="mr-1 h-4 w-4" /> Start
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-none bg-gradient-to-r from-rose-500 to-rose-600 text-white shadow-[0_8px_20px_rgba(244,63,94,0.35)] transition hover:shadow-[0_10px_24px_rgba(244,63,94,0.42)] hover:scale-[1.01] rounded-full px-4 disabled:opacity-50 disabled:shadow-none disabled:scale-100"
+                              onClick={() => requestToggle(agent.name, 'stop')}
+                              disabled={!agent.running}
+                            >
+                              <Pause className="mr-1 h-4 w-4" /> Stop
+                            </Button>
+                          </>
+                        )}
                         <Button
                           size="sm"
                           variant="ghost"
@@ -1443,12 +1591,16 @@ export default function DashboardPage() {
                     </p>
                   </div>
                   <div className="flex gap-2">
-                    <Button size="sm" variant="outline" className="border-emerald-500 bg-emerald-500 text-white hover:bg-emerald-500/85" onClick={() => requestToggle(selectedAgent.name, 'start')} disabled={selectedAgent.running}>
-                      <Play className="mr-1 h-4 w-4" /> Start
-                    </Button>
-                    <Button size="sm" variant="outline" className="border-rose-500 bg-rose-500 text-white hover:bg-rose-500/85" onClick={() => requestToggle(selectedAgent.name, 'stop')} disabled={!selectedAgent.running}>
-                      <Square className="mr-1 h-4 w-4" /> Stop
-                    </Button>
+                    {!isAwsAgent(selectedAgent) && (
+                      <>
+                        <Button size="sm" variant="outline" className="border-emerald-500 bg-emerald-500 text-white hover:bg-emerald-500/85" onClick={() => requestToggle(selectedAgent.name, 'start')} disabled={selectedAgent.running}>
+                          <Play className="mr-1 h-4 w-4" /> Start
+                        </Button>
+                        <Button size="sm" variant="outline" className="border-rose-500 bg-rose-500 text-white hover:bg-rose-500/85" onClick={() => requestToggle(selectedAgent.name, 'stop')} disabled={!selectedAgent.running}>
+                          <Square className="mr-1 h-4 w-4" /> Stop
+                        </Button>
+                      </>
+                    )}
                     <Button size="sm" variant="muted" onClick={() => setSelectedAgent(null)}>Close</Button>
                   </div>
                 </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AGENT_ORG_KEY } from "@/config/agent";
 import { AGENT_API_BASE } from "@/config/api";
 
@@ -21,6 +21,7 @@ export type AgentSummary = {
   startTime?: string | null;
   stopTime?: string | null;
   createdAt?: string | null;
+  deletable?: boolean;
 };
 
 type AgentApiItem = {
@@ -79,6 +80,7 @@ const toAgentSummary = (agent: AgentApiItem): AgentSummary => {
     startTime,
     stopTime,
     createdAt,
+    deletable: true,
   };
 };
 
@@ -110,6 +112,28 @@ export const useAgents = () => {
   const [error, setError] = useState<string | null>(null);
   const [overrides, setOverrides] = useState<Record<number, AgentOverride>>(() => loadOverrides());
 
+  const protectedAgents = useMemo<AgentSummary[]>(() => {
+    const now = formatCurrentTime();
+    return [
+      {
+        agentId: 999001,
+        name: "AWS AIops Agent",
+        zone: "AWS",
+        status: "healthy",
+        running: true,
+        type: "Agent",
+        enterprise: "AWS",
+        version: "v1.0.0",
+        lastActionTime: now,
+        port: 8020,
+        startTime: now,
+        stopTime: null,
+        createdAt: now,
+        deletable: false,
+      },
+    ];
+  }, []);
+
   const removeOverride = useCallback((agentId: number) => {
     setOverrides((prev) => {
       const next = { ...prev };
@@ -135,6 +159,18 @@ export const useAgents = () => {
     [overrides],
   );
 
+  const ensureProtectedAgents = useCallback(
+    (incoming: AgentSummary[]): AgentSummary[] => {
+      const existingNames = new Set(incoming.map((agent) => agent.name.toLowerCase()));
+      const existingIds = new Set(incoming.map((agent) => agent.agentId));
+      const missingProtected = protectedAgents
+        .filter((agent) => !existingIds.has(agent.agentId) && !existingNames.has(agent.name.toLowerCase()))
+        .map(applyOverride);
+      return [...incoming, ...missingProtected];
+    },
+    [applyOverride, protectedAgents],
+  );
+
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -149,17 +185,19 @@ export const useAgents = () => {
       }
       const data = await response.json();
       if (Array.isArray(data.agents)) {
-        setAgents(data.agents.map(toAgentSummary).map(applyOverride));
+        const incomingAgents = data.agents.map(toAgentSummary).map(applyOverride);
+        setAgents(ensureProtectedAgents(incomingAgents));
         return;
       }
-      setAgents([]);
+      setAgents(ensureProtectedAgents([]));
     } catch (err) {
       console.error("Error fetching agent list", err);
       setError(err instanceof Error ? err.message : "Unable to load agent list");
+      setAgents((prev) => (prev.length ? prev : ensureProtectedAgents([])));
     } finally {
       setLoading(false);
     }
-  }, [applyOverride]);
+  }, [applyOverride, ensureProtectedAgents]);
 
   useEffect(() => {
     refresh();
@@ -220,6 +258,11 @@ export const useAgents = () => {
 
   const deleteAgent = useCallback(
     async (agentId: number) => {
+      const isProtected = protectedAgents.some((agent) => agent.agentId === agentId);
+      if (isProtected) {
+        console.warn("Protected agent cannot be deleted");
+        return;
+      }
       try {
         const response = await fetch(`${AGENT_ACTION_BASE}/delete/${agentId}`, {
           method: "DELETE",
@@ -241,11 +284,11 @@ export const useAgents = () => {
         throw err;
       }
     },
-    [removeOverride],
+    [protectedAgents, removeOverride],
   );
 
   const addAgent = useCallback(
-    (agent: Omit<AgentSummary, "agentId"> & { agentId?: number; port?: number | null }) => {
+    (agent: Omit<AgentSummary, "agentId"> & { agentId?: number; port?: number | null; deletable?: boolean }) => {
       setAgents((prev) => [
         {
           agentId: agent.agentId ?? Date.now(),
@@ -261,6 +304,7 @@ export const useAgents = () => {
           startTime: agent.startTime ?? null,
           stopTime: agent.stopTime ?? null,
           createdAt: agent.createdAt ?? formatCurrentTime(),
+          deletable: agent.deletable ?? true,
         },
         ...prev,
       ]);

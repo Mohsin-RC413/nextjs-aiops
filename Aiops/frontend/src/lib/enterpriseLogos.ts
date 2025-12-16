@@ -12,6 +12,7 @@ const LOGO_MAP: Record<string, string> = {
   slack: "/logos/slack.png",
   teams: "/logos/teamslogo.png",
   zoom: "/logos/zoom.png",
+  aws: "/logos/AWS-logo.svg",
 };
 
 export const getEnterpriseLogo = (enterprise?: string | null): string | null => {

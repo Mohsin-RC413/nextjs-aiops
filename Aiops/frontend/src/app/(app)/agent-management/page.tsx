@@ -164,6 +164,7 @@ export default function AgentManagementPage() {
   const paginatedAgentIds = useMemo(
     () =>
       paginatedAgents
+        .filter((agent) => agent.deletable !== false)
         .map((agent) => agent.agentId)
         .filter((id): id is number => typeof id === "number"),
     [paginatedAgents],
@@ -175,12 +176,12 @@ export default function AgentManagementPage() {
 
   useEffect(() => {
     setSelectedAgentIds((prev) =>
-      prev.filter((id) => agents.some((agent) => agent.agentId === id)),
+      prev.filter((id) => agents.some((agent) => agent.agentId === id && agent.deletable !== false)),
     );
   }, [agents]);
 
   const selectedAgents = useMemo(
-    () => agents.filter((agent) => selectedAgentIds.includes(agent.agentId)),
+    () => agents.filter((agent) => agent.deletable !== false && selectedAgentIds.includes(agent.agentId)),
     [agents, selectedAgentIds],
   );
 
@@ -278,6 +279,7 @@ export default function AgentManagementPage() {
         lastActionTime: formatCurrentTime(),
         agentId: createdAgentId,
         port: createdAgentPort,
+        deletable: true,
       });
       setIsModalOpen(false);
       setNewAgentName("");
@@ -637,7 +639,9 @@ export default function AgentManagementPage() {
   };
 
   const handleBulkDelete = async () => {
-    const deletableAgents = selectedAgents.filter((agent) => !agent.running && agent.agentId);
+    const deletableAgents = selectedAgents.filter(
+      (agent) => agent.deletable !== false && !agent.running && agent.agentId,
+    );
     for (const agent of deletableAgents) {
       try {
         await deleteAgent(agent.agentId);
@@ -661,6 +665,8 @@ export default function AgentManagementPage() {
 
   const toggleSelectAgent = (agentId?: number) => {
     if (typeof agentId !== "number") return;
+    const target = agents.find((agent) => agent.agentId === agentId);
+    if (!target || target.deletable === false) return;
     setSelectedAgentIds((prev) =>
       prev.includes(agentId) ? prev.filter((id) => id !== agentId) : [...prev, agentId],
     );
@@ -979,13 +985,15 @@ export default function AgentManagementPage() {
                     const statusLabel = agent.running ? "Online" : "Offline";
                     const portLabel = agent.running && agent.port ? agent.port : "Agent Not Started";
                     const isSelected = agent.agentId ? selectedAgentIds.includes(agent.agentId) : false;
+                    const isDeletable = agent.deletable !== false;
                     return (
                       <tr key={agent.name} className="bg-white/85 transition-colors hover:bg-slate-50">
                         <td className="px-4 py-3 text-center">
                           <input
                             type="checkbox"
-                            className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+                            className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500 disabled:cursor-not-allowed disabled:border-slate-200"
                             checked={isSelected}
+                            disabled={!isDeletable}
                             onChange={() => toggleSelectAgent(agent.agentId)}
                             aria-label={`Select ${agent.name}`}
                           />
@@ -1030,32 +1038,34 @@ export default function AgentManagementPage() {
                             >
                               <Settings className="h-4 w-4" />
                             </button>
-                            <button
-                              type="button"
-                              className={`inline-flex h-9 items-center justify-center rounded-md px-3 text-white shadow-[0_6px_14px_rgba(244,67,54,0.25)] transition ${
-                                agent.running
-                                  ? "cursor-not-allowed bg-slate-200 text-slate-500 shadow-none"
-                                  : "bg-red-500 hover:bg-red-600"
-                              }`}
-                              disabled={agent.running}
-                              aria-label={`Delete ${agent.name}`}
-                              title="Delete"
-                              onClick={() => {
-                                if (agent.running) return;
-                                setDeleteTarget(agent);
-                              }}
-                            >
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                className="h-4 w-4"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                                strokeWidth="1.8"
+                            {agent.deletable !== false && (
+                              <button
+                                type="button"
+                                className={`inline-flex h-9 items-center justify-center rounded-md px-3 text-white shadow-[0_6px_14px_rgba(244,67,54,0.25)] transition ${
+                                  agent.running
+                                    ? "cursor-not-allowed bg-slate-200 text-slate-500 shadow-none"
+                                    : "bg-red-500 hover:bg-red-600"
+                                }`}
+                                disabled={agent.running}
+                                aria-label={`Delete ${agent.name}`}
+                                title="Delete"
+                                onClick={() => {
+                                  if (agent.running) return;
+                                  setDeleteTarget(agent);
+                                }}
                               >
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V5a1 1 0 00-1 1h-4a1 1 0 00-1 1v2m-3 0h12" />
-                              </svg>
-                            </button>
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  className="h-4 w-4"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                  strokeWidth="1.8"
+                                >
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V5a1 1 0 00-1 1h-4a1 1 0 00-1 1v2m-3 0h12" />
+                                </svg>
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
