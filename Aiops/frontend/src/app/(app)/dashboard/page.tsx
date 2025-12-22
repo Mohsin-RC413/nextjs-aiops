@@ -20,6 +20,8 @@ import topAnimation from "../../../../Guy talking to Robot _ AI Help.json";
 const GROQ_API_KEY = "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";
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODEL = "openai/gpt-oss-120b";
+const AWS_AGENT_API_URL = "https://b82fu8316m.execute-api.us-east-1.amazonaws.com/dev/invoke";
+const AWS_SESSION_STORAGE_KEY = "aiops-aws-session-id";
 
 type BackendIncident = {
   sys_id?: string;
@@ -214,6 +216,15 @@ export default function DashboardPage() {
   const [typingAnimation, setTypingAnimation] = useState<{ messageId: number; text: string } | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [awsSessionId, setAwsSessionId] = useState<string | null>(null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const storedSession = window.localStorage.getItem(AWS_SESSION_STORAGE_KEY);
+    if (storedSession) {
+      setAwsSessionId(storedSession);
+      console.log("AWS session restored from storage", storedSession);
+    }
+  }, []);
+
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const onlineAgentCount = useMemo(() => agents.filter((a) => a.running).length, [agents]);
   const totalAgentCount = agents.length;
@@ -564,14 +575,32 @@ export default function DashboardPage() {
 
     try {
       let data: any = null;
+      const historyForAws =
+        isAws && chatMessages.length
+          ? [...chatMessages, userMessage]
+              .slice(-12)
+              .map((msg) => ({
+                role: msg.speaker === "You" ? "user" : "assistant",
+                content: msg.text,
+              }))
+          : undefined;
       if (isAws) {
-        const payload: { message: string; session_id?: string } = {
+        const payload: { mode: "chat"; message: string; session_id?: string; history?: any[] } = {
+          mode: "chat",
           message: userMessage.text,
         };
         if (awsSessionId) {
           payload.session_id = awsSessionId;
         }
-        const response = await fetch("http://localhost:8020/invoke", {
+        if (historyForAws?.length) {
+          payload.history = historyForAws;
+        }
+        console.log("AWS chat request", {
+          payload,
+          usingSession: awsSessionId,
+          historyCount: historyForAws?.length ?? 0,
+        });
+        const response = await fetch(AWS_AGENT_API_URL, {
           method: "POST",
           headers: {
             accept: "application/json",
@@ -580,7 +609,12 @@ export default function DashboardPage() {
           body: JSON.stringify(payload),
         });
         const awsJson = await response.json().catch(() => null);
-        console.log("AWS chat response", { status: response.status, data: awsJson });
+        console.log("AWS chat response", {
+          status: response.status,
+          data: awsJson,
+          echoedSession: awsJson?.session_id,
+          isNewSession: awsJson?.is_new_session,
+        });
         data = awsJson;
         if (!response.ok) {
           const msg = awsJson?.message ?? "Unable to reach AWS agent";
@@ -589,6 +623,10 @@ export default function DashboardPage() {
         const newSessionId = awsJson?.session_id;
         if (newSessionId) {
           setAwsSessionId(newSessionId);
+          if (typeof window !== "undefined") {
+            window.localStorage.setItem(AWS_SESSION_STORAGE_KEY, newSessionId);
+          }
+          console.log("AWS session updated", newSessionId);
         }
       } else if (isMuleAgent) {
         if (!port) {
@@ -707,13 +745,13 @@ export default function DashboardPage() {
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Agent chat</p>
             <h3 className="text-3xl font-semibold text-slate-900">{chatAgent?.name}</h3>
-            <div className="flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-slate-400">
-              <span>Online</span>
-              <span className="h-2 w-2 rounded-full bg-emerald-400" />
-              {chatAgent?.port ? (
-                <span className="tracking-[0.2em] text-slate-500">Port: {chatAgent.port}</span>
-              ) : null}
-            </div>
+              <div className="flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-slate-400">
+                <span>Online</span>
+                <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                {!isAwsAgent(chatAgent ?? { enterprise: "" }) && chatAgent?.port ? (
+                  <span className="tracking-[0.2em] text-slate-500">Port: {chatAgent.port}</span>
+                ) : null}
+              </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -894,13 +932,8 @@ export default function DashboardPage() {
       setTypingAnimation(null);
       setIsTyping(false);
       setIsChatMaximized(false);
-      setAwsSessionId(null);
     }
   }, [chatAgent]);
-
-  useEffect(() => {
-    setAwsSessionId(null);
-  }, [chatAgent?.agentId]);
 
   useEffect(() => {
     if (!chatAgent) return;
@@ -1470,10 +1503,14 @@ export default function DashboardPage() {
                         </span>
                         <div>
                           <p className="text-lg font-semibold tracking-tight">{agent.name}</p>
-                          <p className="text-xs text-white/60">
-                            Port: {agent.running && agent.port ? agent.port : "Agent Not Started"} -{" "}
-                            {agent.version ?? agent.type}
-                          </p>
+                          {isAwsAgent(agent) ? (
+                            <p className="text-xs text-white/60">{agent.version ?? agent.type}</p>
+                          ) : (
+                            <p className="text-xs text-white/60">
+                              Port: {agent.running && agent.port ? agent.port : "Agent Not Started"} -{" "}
+                              {agent.version ?? agent.type}
+                            </p>
+                          )}
                         </div>
                       </div>
                       {(() => {
@@ -1586,9 +1623,13 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xl font-semibold">{selectedAgent.name}</p>
-                    <p className="text-sm text-white/60">
-                      Port: {selectedAgent.running && selectedAgent.port ? selectedAgent.port : "Agent Not Started"} - Version: {selectedAgent.version ?? selectedAgent.type}
-                    </p>
+                    {isAwsAgent(selectedAgent) ? (
+                      <p className="text-sm text-white/60">{selectedAgent.version ?? selectedAgent.type}</p>
+                    ) : (
+                      <p className="text-sm text-white/60">
+                        Port: {selectedAgent.running && selectedAgent.port ? selectedAgent.port : "Agent Not Started"} - Version: {selectedAgent.version ?? selectedAgent.type}
+                      </p>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     {!isAwsAgent(selectedAgent) && (

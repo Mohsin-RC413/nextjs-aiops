@@ -107,9 +107,6 @@ const saveOverrides = (overrides: Record<number, AgentOverride>) => {
 };
 
 export const useAgents = () => {
-  const [agents, setAgents] = useState<AgentSummary[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [overrides, setOverrides] = useState<Record<number, AgentOverride>>(() => loadOverrides());
 
   const protectedAgents = useMemo<AgentSummary[]>(() => {
@@ -117,7 +114,7 @@ export const useAgents = () => {
     return [
       {
         agentId: 999001,
-        name: "AWS AIops Agent",
+        name: "AIOps agent",
         zone: "AWS",
         status: "healthy",
         running: true,
@@ -125,7 +122,7 @@ export const useAgents = () => {
         enterprise: "AWS",
         version: "v1.0.0",
         lastActionTime: now,
-        port: 8020,
+        port: null,
         startTime: now,
         stopTime: null,
         createdAt: now,
@@ -170,6 +167,10 @@ export const useAgents = () => {
     },
     [applyOverride, protectedAgents],
   );
+
+  const [agents, setAgents] = useState<AgentSummary[]>(() => ensureProtectedAgents([]));
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
