@@ -748,7 +748,7 @@ export default function DashboardPage() {
               <div className="flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-slate-400">
                 <span>Online</span>
                 <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                {!isAwsAgent(chatAgent ?? { enterprise: "" }) && chatAgent?.port ? (
+                {chatAgent && chatAgent.port && !isAwsAgent(chatAgent) ? (
                   <span className="tracking-[0.2em] text-slate-500">Port: {chatAgent.port}</span>
                 ) : null}
               </div>
