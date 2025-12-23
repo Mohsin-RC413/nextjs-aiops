@@ -17,7 +17,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import ReactMarkdown from "react-markdown";
 import topAnimation from "../../../../Guy talking to Robot _ AI Help.json";
 
-const GROQ_API_KEY = "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";
+const GROQ_API_KEY = "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";
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODEL = "openai/gpt-oss-120b";
 const AWS_AGENT_API_URL = "https://b82fu8316m.execute-api.us-east-1.amazonaws.com/dev/invoke";
