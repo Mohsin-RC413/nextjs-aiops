@@ -14,6 +14,7 @@ const settingsTabs = [
 type SettingsTab = (typeof settingsTabs)[number]["key"];
 
 const getMuleDropdownBase = (port: number) => `${AGENT_SERVICE_HOST}:${port}/agent/mule/dropdown`;
+const getMuleRulesetBase = (port: number) => `${AGENT_SERVICE_HOST}:${port}/agent/mule`;
 
 const getSettingsStorageKey = (
   suffix: "application" | "platform" | "status" | "ticket" | "notifications" | "frequency",
@@ -46,6 +47,7 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
   const [frequencyOptions, setFrequencyOptions] = useState<DropdownOption[]>([]);
   const [frequencyValue, setFrequencyValue] = useState("");
   const [frequencyLoading, setFrequencyLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const openModal = () => {
     setIsOpen(true);
@@ -159,6 +161,46 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
     setFrequencyValue(value);
     if (typeof window !== "undefined" && platformValue) {
       localStorage.setItem(getSettingsStorageKey("frequency", agent.agentId, platformValue), value);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!agent.port) {
+      return;
+    }
+    if (!applicationValue || !platformValue) {
+      return;
+    }
+    const payload = {
+      agent_id: String(agent.agentId),
+      target_type: applicationValue,
+      target_value: platformValue,
+      target_name: platformValue,
+      conditions: statusSelection,
+      raise_ticket: ticketValue,
+      notifications: notificationSelection,
+      frequency: frequencyValue,
+    };
+    setIsSaving(true);
+    try {
+      const response = await fetch(`${getMuleRulesetBase(agent.port)}/ruleset/save`, {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+      const text = await response.text();
+      try {
+        console.log("Ruleset save response", JSON.parse(text));
+      } catch {
+        console.log("Ruleset save response", text);
+      }
+    } catch (error) {
+      console.error("Ruleset save error", error);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -527,9 +569,9 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
                 );
               })}
             </div>
-            <div className="mt-6 rounded-2xl border border-slate-200/80 bg-white/85 p-5 shadow-inner">
-              {settingsTab === "ruleset" ? (
-                <div>
+          <div className="mt-6 rounded-2xl border border-slate-200/80 bg-white/85 p-5 shadow-inner">
+            {settingsTab === "ruleset" ? (
+              <div>
                   <div className="grid gap-4 md:grid-cols-2">
                     <label className="text-sm font-medium text-slate-600">
                       Application
@@ -681,6 +723,22 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
                 <p className="text-sm text-slate-600">Tab data not exist.</p>
               )}
             </div>
+            {settingsTab === "ruleset" && (
+              <div className="mt-6 flex justify-center">
+                <button
+                  type="button"
+                  className={`rounded-full px-6 py-2 text-sm font-semibold transition ${
+                    !agent.port || !applicationValue || !platformValue || isSaving
+                      ? "cursor-not-allowed bg-slate-200 text-slate-500"
+                      : "bg-slate-900 text-white hover:bg-slate-800"
+                  }`}
+                  onClick={handleSave}
+                  disabled={!agent.port || !applicationValue || !platformValue || isSaving}
+                >
+                  {isSaving ? "Saving..." : "Save"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
