@@ -2,6 +2,7 @@
 
 import { AuthGate } from "@/components/auth/AuthGate";
 import { RequireRole } from "@/components/auth/RequireRole";
+import { AgentActivityLog } from "@/components/AgentActivityLog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -1474,6 +1475,18 @@ export default function DashboardPage() {
               </div>
             </Card>
           </section>
+
+          <div className="flex items-center gap-3 text-slate-600">
+            <span className="h-px flex-1 min-w-[96px] bg-slate-400/50" aria-hidden="true" />
+            <div className="flex items-center gap-2 whitespace-nowrap px-3">
+              <Bot className="h-5 w-5 text-slate-600" aria-hidden="true" />
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-600">
+                Agent Activity Log
+              </p>
+            </div>
+            <span className="h-px flex-1 min-w-[96px] bg-slate-400/50" aria-hidden="true" />
+          </div>
+          <AgentActivityLog agents={agents} className="mt-4" title="Agent activity log" />
 
           {/* Agent Management Section */}
           <section id="agents" className="grid gap-6">
