@@ -1217,10 +1217,11 @@ export default function DashboardPage() {
           </section>
 
           {/* In-page navigation */}
-          <nav className="mt-2 flex w-full flex-wrap gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
-            <Button variant="muted" className="rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 border-none" onClick={() => scrollTo("top")}>Overview</Button>
-            <Button variant="muted" className="rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 border border-slate-200" onClick={() => scrollTo("agents")}>Agent management</Button>
-            <Button variant="muted" className="rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 border border-slate-200" onClick={() => scrollTo("recent-incidents")}>Recent incidents</Button>
+          <nav className="mt-2 flex w-full flex-wrap gap-2 sm:flex-nowrap">
+            <Button variant="muted" className="flex-1 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 border-none" onClick={() => scrollTo("top")}>Overview</Button>
+            <Button variant="muted" className="flex-1 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 border border-slate-200" onClick={() => scrollTo("agent-logs")}>Agent Logs</Button>
+            <Button variant="muted" className="flex-1 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 border border-slate-200" onClick={() => scrollTo("agents")}>Agent management</Button>
+            <Button variant="muted" className="flex-1 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 border border-slate-200" onClick={() => scrollTo("recent-incidents")}>Recent incidents</Button>
           </nav>
 
           <section className="grid gap-4 md:grid-cols-[1.2fr_1fr_1fr]">
@@ -1476,17 +1477,19 @@ export default function DashboardPage() {
             </Card>
           </section>
 
-          <div className="flex items-center gap-3 text-slate-600">
-            <span className="h-px flex-1 min-w-[96px] bg-slate-400/50" aria-hidden="true" />
-            <div className="flex items-center gap-2 whitespace-nowrap px-3">
-              <Bot className="h-5 w-5 text-slate-600" aria-hidden="true" />
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-600">
-                Agent Activity Log
-              </p>
+          <section id="agent-logs" className="space-y-4">
+            <div className="flex items-center gap-3 text-slate-600">
+              <span className="h-px flex-1 min-w-[96px] bg-slate-400/50" aria-hidden="true" />
+              <div className="flex items-center gap-2 whitespace-nowrap px-3">
+                <Bot className="h-5 w-5 text-slate-600" aria-hidden="true" />
+                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-600">
+                  Agent Activity Log
+                </p>
+              </div>
+              <span className="h-px flex-1 min-w-[96px] bg-slate-400/50" aria-hidden="true" />
             </div>
-            <span className="h-px flex-1 min-w-[96px] bg-slate-400/50" aria-hidden="true" />
-          </div>
-          <AgentActivityLog agents={agents} className="mt-4" title="Agent activity log" />
+            <AgentActivityLog agents={agents} title="Agent activity log" />
+          </section>
 
           {/* Agent Management Section */}
           <section id="agents" className="grid gap-6">

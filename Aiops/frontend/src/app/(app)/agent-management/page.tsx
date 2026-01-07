@@ -2,7 +2,6 @@
 
 import { AuthGate } from "@/components/auth/AuthGate";
 import { RequireRole } from "@/components/auth/RequireRole";
-import { AgentActivityLog } from "@/components/AgentActivityLog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AgentSummary, useAgents } from "@/lib/useAgents";
@@ -532,7 +531,6 @@ export default function AgentManagementPage() {
               </button>
             </div>
           </Card>
-          <AgentActivityLog agents={agents} className="mt-6" title="Agent activity log" />
         </section>
 
         {deleteTarget && (

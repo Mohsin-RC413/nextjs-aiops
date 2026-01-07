@@ -63,7 +63,7 @@ export function AgentActivityLog({ agents, className, title = "Agent activity" }
   const typingRef = useRef(false);
   const timeoutRef = useRef<number | null>(null);
   const typingIntervalRef = useRef<number | null>(null);
-  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   const [isTypingIndicator, setIsTypingIndicator] = useState(false);
 
   const muleAgent = useMemo(
@@ -184,7 +184,9 @@ export function AgentActivityLog({ agents, className, title = "Agent activity" }
   }, [muleAgent]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (!scrollRef.current) return;
+    const container = scrollRef.current;
+    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
   }, [logs]);
 
   return (
@@ -197,7 +199,7 @@ export function AgentActivityLog({ agents, className, title = "Agent activity" }
           <p className="mt-1 text-sm text-slate-600">
             {muleAgent
               ? `Streaming from ${muleAgent.name} (port ${muleAgent.port})`
-              : "Start a Mule agent to view activity logs."}
+              : "No MuleSoft agent started. Please start MuleSoft agent to show logs."}
           </p>
         </div>
         <span
@@ -206,12 +208,14 @@ export function AgentActivityLog({ agents, className, title = "Agent activity" }
         />
       </div>
 
-      <div className="mt-4 max-h-[360px] overflow-y-auto pr-2">
+      <div ref={scrollRef} className="mt-4 max-h-[360px] overflow-y-auto pr-2">
         {muleAgent && logs.length === 0 ? (
           <p className="text-sm text-slate-600">Waiting for agent activity...</p>
         ) : null}
         {!muleAgent ? (
-          <p className="text-sm text-slate-600">No running Mule agent found.</p>
+          <p className="text-sm text-slate-600">
+            No MuleSoft agent started. Please start MuleSoft agent to show logs.
+          </p>
         ) : (
           <div className="flex flex-col gap-3">
             {logs.map((log) => {
@@ -254,7 +258,6 @@ export function AgentActivityLog({ agents, className, title = "Agent activity" }
             ) : null}
           </div>
         )}
-        <div ref={bottomRef} />
       </div>
     </div>
   );
