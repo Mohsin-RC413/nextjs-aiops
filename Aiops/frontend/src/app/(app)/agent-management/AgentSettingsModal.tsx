@@ -2,16 +2,31 @@
 
 import { AGENT_SERVICE_HOST } from "@/config/api";
 import { AgentSummary } from "@/lib/useAgents";
-import { Settings } from "lucide-react";
+import {
+  Bot,
+  BookOpen,
+  Eye,
+  ListChecks,
+  Pencil,
+  PlusCircle,
+  Settings,
+  Shield,
+  Trash2,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 
 type DropdownOption = { label: string; value: string };
 const settingsTabs = [
-  { key: "ruleset", label: "Ruleset" },
-  { key: "knowledge", label: "Knowledge Base" },
-  { key: "security", label: "Security" },
+  { key: "ruleset", label: "Ruleset", icon: ListChecks },
+  { key: "knowledge", label: "Knowledge Base", icon: BookOpen },
+  { key: "security", label: "Security", icon: Shield },
 ] as const;
 type SettingsTab = (typeof settingsTabs)[number]["key"];
+const rulesetTabs = [
+  { key: "view", label: "View Ruleset", icon: Eye },
+  { key: "add", label: "Add Ruleset", icon: PlusCircle },
+] as const;
+type RulesetTab = (typeof rulesetTabs)[number]["key"];
 
 const getMuleDropdownBase = (port: number) => `${AGENT_SERVICE_HOST}:${port}/agent/mule/dropdown`;
 const getMuleRulesetBase = (port: number) => `${AGENT_SERVICE_HOST}:${port}/agent/mule`;
@@ -29,6 +44,7 @@ type AgentSettingsModalProps = {
 export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("ruleset");
+  const [rulesetTab, setRulesetTab] = useState<RulesetTab>("view");
   const [applicationOptions, setApplicationOptions] = useState<DropdownOption[]>([]);
   const [applicationValue, setApplicationValue] = useState("");
   const [applicationLoading, setApplicationLoading] = useState(false);
@@ -47,11 +63,15 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
   const [frequencyOptions, setFrequencyOptions] = useState<DropdownOption[]>([]);
   const [frequencyValue, setFrequencyValue] = useState("");
   const [frequencyLoading, setFrequencyLoading] = useState(false);
+  const [rulesetItems, setRulesetItems] = useState<Record<string, unknown>[]>([]);
+  const [rulesetLoading, setRulesetLoading] = useState(false);
+  const [rulesetError, setRulesetError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   const openModal = () => {
     setIsOpen(true);
     setSettingsTab("ruleset");
+    setRulesetTab("view");
     setApplicationOptions([]);
     setApplicationValue("");
     setApplicationLoading(false);
@@ -70,11 +90,15 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
     setFrequencyOptions([]);
     setFrequencyValue("");
     setFrequencyLoading(false);
+    setRulesetItems([]);
+    setRulesetLoading(false);
+    setRulesetError(null);
   };
 
   const closeModal = () => {
     setIsOpen(false);
     setSettingsTab("ruleset");
+    setRulesetTab("view");
     setApplicationOptions([]);
     setApplicationValue("");
     setApplicationLoading(false);
@@ -93,6 +117,19 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
     setFrequencyOptions([]);
     setFrequencyValue("");
     setFrequencyLoading(false);
+    setRulesetItems([]);
+    setRulesetLoading(false);
+    setRulesetError(null);
+    if (typeof window !== "undefined") {
+      const keyPrefix = "agent-settings-";
+      const agentToken = `-${agent.agentId}`;
+      for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+        const key = localStorage.key(index);
+        if (key && key.startsWith(keyPrefix) && key.includes(agentToken)) {
+          localStorage.removeItem(key);
+        }
+      }
+    }
   };
 
   const handleApplicationChange = (value: string) => {
@@ -128,10 +165,12 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
     setStatusSelection((prev) => {
       const next = prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value];
       if (typeof window !== "undefined" && platformValue) {
-        localStorage.setItem(
-          getSettingsStorageKey("status", agent.agentId, platformValue),
-          JSON.stringify(next),
-        );
+        const storageKey = getSettingsStorageKey("status", agent.agentId, platformValue);
+        if (next.length === 0) {
+          localStorage.removeItem(storageKey);
+        } else {
+          localStorage.setItem(storageKey, JSON.stringify(next));
+        }
       }
       return next;
     });
@@ -148,10 +187,12 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
     setNotificationSelection((prev) => {
       const next = prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value];
       if (typeof window !== "undefined" && platformValue) {
-        localStorage.setItem(
-          getSettingsStorageKey("notifications", agent.agentId, platformValue),
-          JSON.stringify(next),
-        );
+        const storageKey = getSettingsStorageKey("notifications", agent.agentId, platformValue);
+        if (next.length === 0) {
+          localStorage.removeItem(storageKey);
+        } else {
+          localStorage.setItem(storageKey, JSON.stringify(next));
+        }
       }
       return next;
     });
@@ -168,7 +209,7 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
     if (!agent.port) {
       return;
     }
-    if (!applicationValue || !platformValue) {
+    if (!applicationValue || !platformValue || !ticketValue || !frequencyValue) {
       return;
     }
     const payload = {
@@ -181,6 +222,7 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
       notifications: notificationSelection,
       frequency: frequencyValue,
     };
+    console.log("Ruleset save payload", payload);
     setIsSaving(true);
     try {
       const response = await fetch(`${getMuleRulesetBase(agent.port)}/ruleset/save`, {
@@ -202,6 +244,111 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const hasRulesetFields = (record: Record<string, unknown>) => {
+    const keys = [
+      "target_type",
+      "target_value",
+      "target_name",
+      "conditions",
+      "raise_ticket",
+      "notifications",
+      "frequency",
+    ];
+    return keys.some((key) => key in record);
+  };
+
+  const normalizeRulesets = (data: unknown) => {
+    if (Array.isArray(data)) {
+      return data as Record<string, unknown>[];
+    }
+    if (data && typeof data === "object") {
+      const record = data as Record<string, unknown>;
+      const candidate = record.rulesets ?? record.data ?? record.items ?? record.results ?? record.list;
+      if (Array.isArray(candidate)) {
+        return candidate as Record<string, unknown>[];
+      }
+      if (candidate && typeof candidate === "object" && hasRulesetFields(candidate as Record<string, unknown>)) {
+        return [candidate as Record<string, unknown>];
+      }
+      if (hasRulesetFields(record)) {
+        return [record];
+      }
+    }
+    return [];
+  };
+
+  const getRulesetField = (ruleset: Record<string, unknown>, keys: string[]) => {
+    for (const key of keys) {
+      const value = ruleset[key];
+      if (value !== undefined && value !== null && value !== "") {
+        return value;
+      }
+    }
+    return null;
+  };
+
+  const formatRulesetValue = (value: unknown) => {
+    if (Array.isArray(value)) {
+      return value.length > 0 ? value.map((item) => String(item)).join(", ") : "—";
+    }
+    if (value === null || value === undefined || value === "") {
+      return "—";
+    }
+    if (typeof value === "object") {
+      return JSON.stringify(value);
+    }
+    return String(value);
+  };
+
+  const normalizeRulesetList = (value: unknown) => {
+    if (Array.isArray(value)) {
+      return value.map((item) => String(item).trim()).filter(Boolean);
+    }
+    if (value === null || value === undefined) {
+      return [];
+    }
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (!trimmed) {
+        return [];
+      }
+      if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+        const jsonCandidate = trimmed.replace(/'/g, "\"");
+        try {
+          const parsed = JSON.parse(jsonCandidate);
+          if (Array.isArray(parsed)) {
+            return parsed.map((item) => String(item).trim()).filter(Boolean);
+          }
+        } catch {
+          // Fall through to manual parsing.
+        }
+        const inner = trimmed.slice(1, -1);
+        return inner
+          .split(",")
+          .map((item) => item.replace(/['"]/g, "").trim())
+          .filter(Boolean);
+      }
+      if (trimmed.includes(",")) {
+        return trimmed
+          .split(",")
+          .map((item) => item.replace(/['"]/g, "").trim())
+          .filter(Boolean);
+      }
+      return [trimmed.replace(/['"]/g, "").trim()].filter(Boolean);
+    }
+    if (typeof value === "number" || typeof value === "boolean") {
+      return [String(value)];
+    }
+    return [];
+  };
+
+  const renderRulesetList = (value: unknown) => {
+    const items = normalizeRulesetList(value);
+    const text = items.length > 0 ? items.join(", ") : "--";
+    const toneClass = items.length > 0 ? "text-slate-700 font-semibold" : "text-slate-400";
+    return <p className={`mt-2 text-sm ${toneClass}`}>{text}</p>;
   };
 
   useEffect(() => {
@@ -388,6 +535,53 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
   }, [agent.agentId, agent.port, isOpen, platformValue]);
 
   useEffect(() => {
+    if (!isOpen || settingsTab !== "ruleset" || rulesetTab !== "view") {
+      return;
+    }
+    if (!agent.agentId || !agent.port) {
+      setRulesetItems([]);
+      setRulesetLoading(false);
+      setRulesetError(null);
+      return;
+    }
+    const controller = new AbortController();
+    const load = async () => {
+      setRulesetLoading(true);
+      setRulesetError(null);
+      try {
+        const response = await fetch(
+          `${getMuleRulesetBase(agent.port)}/ruleset/list/${agent.agentId}`,
+          {
+            method: "GET",
+            headers: {
+              accept: "application/json",
+            },
+            signal: controller.signal,
+          },
+        );
+        if (!response.ok) {
+          throw new Error("Unable to load rulesets");
+        }
+        const data = await response.json();
+        if (!controller.signal.aborted) {
+          setRulesetItems(normalizeRulesets(data));
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setRulesetItems([]);
+          setRulesetError("Unable to load rulesets right now.");
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setRulesetLoading(false);
+        }
+      }
+    };
+    load();
+    return () => controller.abort();
+  }, [agent.agentId, agent.port, isOpen, rulesetTab, settingsTab]);
+
+  useEffect(() => {
     if (!isOpen) {
       return;
     }
@@ -537,12 +731,22 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
         <Settings className="h-4 w-4" />
       </button>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4">
-          <div className="w-full max-w-2xl rounded-[28px] border border-slate-200/80 bg-white/95 p-6 shadow-[0_30px_70px_rgba(15,23,42,0.35)]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4">
+          <div className="w-full max-w-[80vw] min-h-[620px] max-h-[80vh] rounded-[28px] border border-slate-200/80 bg-white/95 p-6 shadow-[0_30px_70px_rgba(15,23,42,0.35)] flex flex-col overflow-hidden">
             <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Agent settings</p>
-                <h3 className="text-2xl font-semibold text-slate-900">{agent.name}</h3>
+              <div className="space-y-1">
+                <p className="flex items-center justify-center gap-2 text-sm font-semibold uppercase tracking-[0.32em] text-slate-700">
+                  <Settings className="h-3.5 w-3.5" aria-hidden="true" />
+                  Agent settings
+                </p>
+                <h3 className="flex items-center gap-2 text-2xl font-semibold text-slate-900">
+                  <Bot className="h-6 w-6 text-slate-500" aria-hidden="true" />
+                  <span>{agent.name}</span>
+                  <span
+                    className={`h-2.5 w-2.5 rounded-full ${agent.running ? "bg-emerald-500" : "bg-slate-300"}`}
+                    aria-label={agent.running ? "Online" : "Offline"}
+                  />
+                </h3>
               </div>
               <button
                 type="button"
@@ -555,190 +759,389 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
             <div className="mt-5 flex flex-wrap gap-2">
               {settingsTabs.map((tab) => {
                 const isActive = settingsTab === tab.key;
+                const Icon = tab.icon;
                 return (
                   <button
                     key={tab.key}
                     type="button"
                     onClick={() => setSettingsTab(tab.key)}
                     className={`rounded-full px-4 py-2 text-xs uppercase tracking-[0.3em] transition ${
-                      isActive ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      isActive
+                        ? "bg-red-500 text-true-white shadow-[0_10px_20px_rgba(244,67,54,0.25)]"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                     }`}
                   >
-                    {tab.label}
+                    <span className="inline-flex items-center gap-2">
+                      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                      {tab.label}
+                    </span>
                   </button>
                 );
               })}
             </div>
-          <div className="mt-6 rounded-2xl border border-slate-200/80 bg-white/85 p-5 shadow-inner">
-            {settingsTab === "ruleset" ? (
-              <div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <label className="text-sm font-medium text-slate-600">
-                      Application
-                      <select
-                        className={`mt-2 w-full rounded-2xl border border-slate-200/80 px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none ${
-                          !agent.port || applicationLoading
-                            ? "bg-slate-200 text-slate-500 cursor-not-allowed"
-                            : "bg-white text-slate-900"
-                        }`}
-                        value={applicationValue}
-                        onChange={(event) => handleApplicationChange(event.target.value)}
-                        disabled={!agent.port || applicationLoading}
-                      >
-                        <option value="">
-                          {!agent.port
-                            ? "Agent not started"
-                            : applicationLoading
-                            ? "Loading applications..."
-                            : "Select application"}
-                        </option>
-                        {applicationOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="text-sm font-medium text-slate-600">
-                      Platform
-                      <select
-                        className={`mt-2 w-full rounded-2xl border border-slate-200/80 px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none ${
-                          !agent.port || !applicationValue || platformLoading
-                            ? "bg-slate-200 text-slate-500 cursor-not-allowed"
-                            : "bg-white text-slate-900"
-                        }`}
-                        value={platformValue}
-                        onChange={(event) => handlePlatformChange(event.target.value)}
-                        disabled={!agent.port || !applicationValue || platformLoading}
-                      >
-                        <option value="">
-                          {!agent.port
-                            ? "Agent not started"
-                            : !applicationValue
-                            ? "Select application first"
-                            : platformLoading
-                            ? "Loading platforms..."
-                            : "Select platform"}
-                        </option>
-                        {platformOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-                  {platformValue && (
-                    <div className="mt-6 grid gap-4 md:grid-cols-2">
-                      <div className="rounded-2xl border border-slate-200/70 bg-white/90 p-4">
-                        <p className="text-sm font-medium text-slate-600">Status</p>
-                        {statusLoading ? (
-                          <p className="mt-2 text-xs text-slate-400">Loading status options...</p>
-                        ) : statusOptions.length > 0 ? (
-                          <div className="mt-3 space-y-2">
-                            {statusOptions.map((option) => (
-                              <label key={option.value} className="flex items-center gap-2 text-sm text-slate-700">
-                                <input
-                                  type="checkbox"
-                                  className="h-4 w-4 rounded border-slate-300 text-indigo-500 focus:ring-indigo-500"
-                                  checked={statusSelection.includes(option.value)}
-                                  onChange={() => handleStatusToggle(option.value)}
-                                />
-                                {option.label}
-                              </label>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="mt-2 text-xs text-slate-400">No status options available.</p>
-                        )}
-                      </div>
-                      <label className="text-sm font-medium text-slate-600">
-                        Ticketing Running Agent
-                        <select
-                          className={`mt-2 w-full rounded-2xl border border-slate-200/80 px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none ${
-                            ticketLoading ? "bg-slate-200 text-slate-500 cursor-not-allowed" : "bg-white text-slate-900"
+            <div className="mt-6 flex min-h-0 flex-1 flex-col overflow-y-auto pr-1">
+              <div className="rounded-2xl border border-slate-200/80 bg-white/85 p-5 shadow-inner flex flex-1 flex-col">
+                {settingsTab === "ruleset" ? (
+                  <div className="space-y-5">
+                    <div className="flex flex-wrap items-center gap-2 rounded-full border border-slate-200/70 bg-slate-100/70 p-1.5 shadow-sm">
+                      {rulesetTabs.map((tab) => {
+                        const isActive = rulesetTab === tab.key;
+                        const Icon = tab.icon;
+                        return (
+                          <button
+                            key={tab.key}
+                            type="button"
+                            onClick={() => setRulesetTab(tab.key)}
+                            className={`rounded-full px-4 py-2 text-xs uppercase tracking-[0.28em] transition ${
+                            isActive
+                              ? "bg-red-500 text-true-white shadow-[0_10px_20px_rgba(244,67,54,0.25)]"
+                              : "text-slate-600 hover:text-slate-900"
                           }`}
-                          value={ticketValue}
-                          onChange={(event) => handleTicketChange(event.target.value)}
-                          disabled={ticketLoading}
                         >
-                          <option value="">
-                            {ticketLoading ? "Loading ticketing agents..." : "Select ticketing agent"}
-                          </option>
-                          {ticketOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <div className="rounded-2xl border border-slate-200/70 bg-white/90 p-4">
-                        <p className="text-sm font-medium text-slate-600">Notification Agent</p>
-                        {notificationLoading ? (
-                          <p className="mt-2 text-xs text-slate-400">Loading notification options...</p>
-                        ) : notificationOptions.length > 0 ? (
-                          <div className="mt-3 space-y-2">
-                            {notificationOptions.map((option) => (
-                              <label key={option.value} className="flex items-center gap-2 text-sm text-slate-700">
-                                <input
-                                  type="checkbox"
-                                  className="h-4 w-4 rounded border-slate-300 text-indigo-500 focus:ring-indigo-500"
-                                  checked={notificationSelection.includes(option.value)}
-                                  onChange={() => handleNotificationToggle(option.value)}
-                                />
-                                {option.label}
-                              </label>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="mt-2 text-xs text-slate-400">No notification options available.</p>
-                        )}
-                      </div>
-                      <label className="text-sm font-medium text-slate-600">
-                        Frequency
-                        <select
-                          className={`mt-2 w-full rounded-2xl border border-slate-200/80 px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none ${
-                            frequencyLoading
-                              ? "bg-slate-200 text-slate-500 cursor-not-allowed"
-                              : "bg-white text-slate-900"
-                          }`}
-                          value={frequencyValue}
-                          onChange={(event) => handleFrequencyChange(event.target.value)}
-                          disabled={frequencyLoading}
-                        >
-                          <option value="">
-                            {frequencyLoading ? "Loading frequencies..." : "Select frequency"}
-                          </option>
-                          {frequencyOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                          <span className="inline-flex items-center gap-2">
+                            <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                            {tab.label}
+                          </span>
+                          </button>
+                        );
+                      })}
                     </div>
-                  )}
+                    {rulesetTab === "view" ? (
+                      <div className="space-y-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-700">Saved rulesets</p>
+                          </div>
+                          <p className="text-xs text-slate-500">
+                            {rulesetLoading ? "Loading..." : `${rulesetItems.length} total`}
+                          </p>
+                        </div>
+                        {rulesetLoading ? (
+                          <div className="rounded-2xl border border-slate-200/80 bg-white/90 p-6 text-sm text-slate-500">
+                            Loading rulesets...
+                          </div>
+                        ) : rulesetError ? (
+                          <div className="rounded-2xl border border-rose-200/70 bg-rose-50/70 p-6 text-sm text-rose-600">
+                            {rulesetError}
+                          </div>
+                        ) : rulesetItems.length === 0 ? (
+                          <div className="flex min-h-[160px] flex-col items-center justify-center text-center">
+                            <p className="text-sm font-semibold text-slate-700">No rulesets</p>
+                            <p className="mt-2 text-sm text-slate-500">
+                              No rulesets to show yet. Switch to Add Ruleset to create your first one.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="grid gap-4">
+                            {rulesetItems.map((ruleset, index) => {
+                              const nameValue = getRulesetField(ruleset, [
+                                "target_name",
+                                "target_value",
+                                "app_name",
+                                "name",
+                              ]);
+                              const targetType = getRulesetField(ruleset, [
+                                "target_type",
+                                "application",
+                                "app_type",
+                              ]);
+                              const targetValue = getRulesetField(ruleset, [
+                                "target_value",
+                                "platform",
+                                "app_name",
+                                "target",
+                              ]);
+                              const ticketValue = getRulesetField(ruleset, [
+                                "raise_ticket",
+                                "ticket",
+                                "ticketing_agent",
+                              ]);
+                              const frequencyValue = getRulesetField(ruleset, [
+                                "frequency",
+                                "run_frequency",
+                              ]);
+                              const conditionsValue = getRulesetField(ruleset, [
+                                "conditions",
+                                "status",
+                                "status_conditions",
+                              ]);
+                              const notificationsValue = getRulesetField(ruleset, [
+                                "notifications",
+                                "notification_agents",
+                                "notification",
+                              ]);
+                              const title =
+                                formatRulesetValue(nameValue) !== "—"
+                                  ? formatRulesetValue(nameValue)
+                                  : `Ruleset ${index + 1}`;
+                              return (
+                                <div
+                                  key={`ruleset-${index}`}
+                                  className="rounded-2xl border border-slate-200/80 bg-white/90 p-5 shadow-sm"
+                                >
+                                  <div className="flex flex-wrap items-start justify-between gap-3">
+                                    <div>
+                                      <p className="text-xs uppercase tracking-[0.28em] text-slate-400">
+                                        Ruleset {index + 1}
+                                      </p>
+                                      <h4 className="text-lg font-semibold text-slate-900">{title}</h4>
+                                      <p className="mt-1 text-xs text-slate-500">
+                                        {formatRulesetValue(targetType)}
+                                      </p>
+                                    </div>
+                                    <span className="inline-flex items-center justify-center rounded-full border border-red-200 bg-red-50 p-1.5 text-red-600">
+                                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                                    </span>
+                                  </div>
+                                  <div className="mt-4 space-y-4">
+                                    <div className="grid gap-4 md:grid-cols-3">
+                                      <div className="flex items-center gap-3 text-sm font-medium text-slate-600">
+                                        <span className="whitespace-nowrap">Application</span>
+                                        <div className="text-sm font-semibold text-slate-700">
+                                          {formatRulesetValue(targetType)}
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-3 text-sm font-medium text-slate-600">
+                                        <span className="whitespace-nowrap">Platform</span>
+                                        <div className="text-sm font-semibold text-slate-700">
+                                          {formatRulesetValue(targetValue)}
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-3 text-sm font-medium text-slate-600">
+                                        <span className="whitespace-nowrap">Ticketing Running Agent</span>
+                                        <div className="text-sm font-semibold text-slate-700">
+                                          {formatRulesetValue(ticketValue)}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="grid gap-4 md:grid-cols-3">
+                                      <div className="flex flex-col items-start text-left">
+                                        <div className="inline-flex items-center gap-2 whitespace-nowrap">
+                                          <p className="text-xs uppercase tracking-wide text-slate-400">Frequency</p>
+                                          <Pencil className="h-3.5 w-3.5 text-slate-400" />
+                                        </div>
+                                        <p className="mt-1 text-sm font-semibold text-slate-700">
+                                          {formatRulesetValue(frequencyValue)}
+                                        </p>
+                                      </div>
+                                      <div className="flex flex-col items-start text-left">
+                                        <div className="inline-flex items-center gap-2 whitespace-nowrap">
+                                          <p className="text-xs uppercase tracking-wide text-slate-400">Conditions</p>
+                                          <Pencil className="h-3.5 w-3.5 text-slate-400" />
+                                        </div>
+                                        {renderRulesetList(conditionsValue)}
+                                      </div>
+                                      <div className="flex flex-col items-start text-left">
+                                        <div className="inline-flex items-center gap-2 whitespace-nowrap">
+                                          <p className="text-xs uppercase tracking-wide text-slate-400">Notifications</p>
+                                          <Pencil className="h-3.5 w-3.5 text-slate-400" />
+                                        </div>
+                                        {renderRulesetList(notificationsValue)}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <label className="flex items-center gap-3 text-sm font-medium text-slate-600">
+                            <span className="whitespace-nowrap">Application</span>
+                            <select
+                              className={`w-[360px] max-w-full flex-none rounded-2xl border border-slate-200/80 px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none ${
+                                !agent.port || applicationLoading
+                                  ? "bg-slate-200 text-slate-500 cursor-not-allowed"
+                                  : "bg-white text-slate-900"
+                              }`}
+                              value={applicationValue}
+                              onChange={(event) => handleApplicationChange(event.target.value)}
+                              disabled={!agent.port || applicationLoading}
+                            >
+                              <option value="">
+                                {!agent.port
+                                  ? "Agent not started"
+                                  : applicationLoading
+                                  ? "Loading applications..."
+                                  : "Select application"}
+                              </option>
+                              {applicationOptions.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="flex items-center gap-3 text-sm font-medium text-slate-600">
+                            <span className="whitespace-nowrap">Platform</span>
+                            <select
+                              className={`w-[360px] max-w-full flex-none rounded-2xl border border-slate-200/80 px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none ${
+                                !agent.port || !applicationValue || platformLoading
+                                  ? "bg-slate-200 text-slate-500 cursor-not-allowed"
+                                  : "bg-white text-slate-900"
+                              }`}
+                              value={platformValue}
+                              onChange={(event) => handlePlatformChange(event.target.value)}
+                              disabled={!agent.port || !applicationValue || platformLoading}
+                            >
+                              <option value="">
+                                {!agent.port
+                                  ? "Agent not started"
+                                  : !applicationValue
+                                  ? "Select application first"
+                                  : platformLoading
+                                  ? "Loading platforms..."
+                                  : "Select platform"}
+                              </option>
+                              {platformOptions.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                        {platformValue && (
+                          <div className="mt-6 grid justify-items-start gap-6 md:grid-cols-2">
+                            <label className="flex items-center gap-3 text-sm font-medium text-slate-600">
+                              <span className="whitespace-nowrap">Ticketing Running Agent</span>
+                              <select
+                                className={`w-[360px] max-w-full flex-none rounded-2xl border border-slate-200/80 px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none ${
+                                  ticketLoading
+                                    ? "bg-slate-200 text-slate-500 cursor-not-allowed"
+                                    : "bg-white text-slate-900"
+                                }`}
+                                value={ticketValue}
+                                onChange={(event) => handleTicketChange(event.target.value)}
+                                disabled={ticketLoading}
+                              >
+                                <option value="">
+                                  {ticketLoading ? "Loading ticketing agents..." : "Select ticketing agent"}
+                                </option>
+                                {ticketOptions.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="flex items-center gap-3 text-sm font-medium text-slate-600">
+                              <span className="whitespace-nowrap">Frequency</span>
+                              <select
+                                className={`w-[360px] max-w-full flex-none rounded-2xl border border-slate-200/80 px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none ${
+                                  frequencyLoading
+                                    ? "bg-slate-200 text-slate-500 cursor-not-allowed"
+                                    : "bg-white text-slate-900"
+                                }`}
+                                value={frequencyValue}
+                                onChange={(event) => handleFrequencyChange(event.target.value)}
+                                disabled={frequencyLoading}
+                              >
+                                <option value="">
+                                  {frequencyLoading ? "Loading frequencies..." : "Select frequency"}
+                                </option>
+                                {frequencyOptions.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <div className="flex flex-col gap-3 text-left">
+                              <span className="text-sm font-semibold text-slate-600">Status</span>
+                              {statusLoading ? (
+                                <span className="text-xs text-slate-400">Loading status options...</span>
+                              ) : statusOptions.length > 0 ? (
+                                <div className="flex flex-wrap items-center justify-start gap-4">
+                                  {statusOptions.map((option) => (
+                                    <label
+                                      key={option.value}
+                                      className="flex cursor-pointer items-center gap-2 text-sm text-slate-700"
+                                    >
+                                      <span className="font-medium text-slate-700">{option.label}</span>
+                                      <input
+                                        type="checkbox"
+                                        className="relative h-5 w-5 shrink-0 cursor-pointer appearance-none rounded-full border border-slate-300 bg-white transition focus:outline-none focus:ring-2 focus:ring-slate-200 after:absolute after:left-1/2 after:top-1/2 after:h-2.5 after:w-2.5 after:-translate-x-1/2 after:-translate-y-1/2 after:rounded-full after:bg-slate-600 after:opacity-0 after:transition after:content-[''] checked:border-slate-500 checked:bg-white checked:after:opacity-100"
+                                        checked={statusSelection.includes(option.value)}
+                                        onChange={() => handleStatusToggle(option.value)}
+                                      />
+                                    </label>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-slate-400">No status options available.</span>
+                              )}
+                            </div>
+                            <div className="flex flex-col gap-3 text-left">
+                              <span className="text-sm font-semibold text-slate-600">Notification Agent</span>
+                              {notificationLoading ? (
+                                <span className="text-xs text-slate-400">Loading notification options...</span>
+                              ) : notificationOptions.length > 0 ? (
+                                <div className="flex flex-wrap items-center justify-start gap-4">
+                                  {notificationOptions.map((option) => (
+                                    <label
+                                      key={option.value}
+                                      className="flex cursor-pointer items-center gap-2 text-sm text-slate-700"
+                                    >
+                                      <span className="font-medium text-slate-700">{option.label}</span>
+                                      <input
+                                        type="checkbox"
+                                        className="relative h-5 w-5 shrink-0 cursor-pointer appearance-none rounded-full border border-slate-300 bg-white transition focus:outline-none focus:ring-2 focus:ring-slate-200 after:absolute after:left-1/2 after:top-1/2 after:h-2.5 after:w-2.5 after:-translate-x-1/2 after:-translate-y-1/2 after:rounded-full after:bg-slate-600 after:opacity-0 after:transition after:content-[''] checked:border-slate-500 checked:bg-white checked:after:opacity-100"
+                                        checked={notificationSelection.includes(option.value)}
+                                        onChange={() => handleNotificationToggle(option.value)}
+                                      />
+                                    </label>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-slate-400">No notification options available.</span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-600">Tab data not exist.</p>
+                )}
+              </div>
+            </div>
+            <div className="shrink-0 border-t border-slate-200/70 bg-white/95 pt-4">
+              {settingsTab === "ruleset" && rulesetTab === "add" ? (
+                <div className="flex justify-center">
+                  <button
+                    type="button"
+                    className={`rounded-full px-6 py-2 text-sm font-semibold transition ${
+                      !agent.port ||
+                      !applicationValue ||
+                      !platformValue ||
+                      !ticketValue ||
+                      !frequencyValue ||
+                      isSaving
+                        ? "cursor-not-allowed bg-slate-200 text-slate-500"
+                        : "bg-red-500 text-true-white hover:bg-red-600"
+                    }`}
+                    onClick={handleSave}
+                    disabled={
+                      !agent.port ||
+                      !applicationValue ||
+                      !platformValue ||
+                      !ticketValue ||
+                      !frequencyValue ||
+                      isSaving
+                    }
+                  >
+                    {isSaving ? "Saving..." : "Save"}
+                  </button>
                 </div>
               ) : (
-                <p className="text-sm text-slate-600">Tab data not exist.</p>
+                <div className="h-10" aria-hidden="true" />
               )}
             </div>
-            {settingsTab === "ruleset" && (
-              <div className="mt-6 flex justify-center">
-                <button
-                  type="button"
-                  className={`rounded-full px-6 py-2 text-sm font-semibold transition ${
-                    !agent.port || !applicationValue || !platformValue || isSaving
-                      ? "cursor-not-allowed bg-slate-200 text-slate-500"
-                      : "bg-slate-900 text-white hover:bg-slate-800"
-                  }`}
-                  onClick={handleSave}
-                  disabled={!agent.port || !applicationValue || !platformValue || isSaving}
-                >
-                  {isSaving ? "Saving..." : "Save"}
-                </button>
-              </div>
-            )}
           </div>
         </div>
       )}
