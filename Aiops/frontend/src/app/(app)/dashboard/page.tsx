@@ -750,7 +750,7 @@ export default function DashboardPage() {
                 <span>Online</span>
                 <span className="h-2 w-2 rounded-full bg-emerald-400" />
                 {chatAgent && chatAgent.port && !isAwsAgent(chatAgent) ? (
-                  <span className="tracking-[0.2em] text-slate-500">Port: {chatAgent.port}</span>
+                  <span className="tracking-[0.2em] text-slate-500">Running at: {chatAgent.port}</span>
                 ) : null}
               </div>
           </div>
@@ -1523,7 +1523,7 @@ export default function DashboardPage() {
                             <p className="text-xs text-white/60">{agent.version ?? agent.type}</p>
                           ) : (
                             <p className="text-xs text-white/60">
-                              Port: {agent.running && agent.port ? agent.port : "Agent Not Started"} -{" "}
+                              Running at: {agent.running && agent.port ? agent.port : "Agent Not Started"} -{" "}
                               {agent.version ?? agent.type}
                             </p>
                           )}
@@ -1643,7 +1643,7 @@ export default function DashboardPage() {
                       <p className="text-sm text-white/60">{selectedAgent.version ?? selectedAgent.type}</p>
                     ) : (
                       <p className="text-sm text-white/60">
-                        Port: {selectedAgent.running && selectedAgent.port ? selectedAgent.port : "Agent Not Started"} - Version: {selectedAgent.version ?? selectedAgent.type}
+                        Running at: {selectedAgent.running && selectedAgent.port ? selectedAgent.port : "Agent Not Started"} - Version: {selectedAgent.version ?? selectedAgent.type}
                       </p>
                     )}
                   </div>

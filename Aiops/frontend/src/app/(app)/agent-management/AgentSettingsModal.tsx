@@ -921,13 +921,13 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
                                   <div className="mt-4 space-y-4">
                                     <div className="grid gap-4 md:grid-cols-3">
                                       <div className="flex items-center gap-3 text-sm font-medium text-slate-600">
-                                        <span className="whitespace-nowrap">Application</span>
+                                        <span className="whitespace-nowrap">Platform</span>
                                         <div className="text-sm font-semibold text-slate-700">
                                           {formatRulesetValue(targetType)}
                                         </div>
                                       </div>
                                       <div className="flex items-center gap-3 text-sm font-medium text-slate-600">
-                                        <span className="whitespace-nowrap">Platform</span>
+                                        <span className="whitespace-nowrap">Application</span>
                                         <div className="text-sm font-semibold text-slate-700">
                                           {formatRulesetValue(targetValue)}
                                         </div>
@@ -975,7 +975,7 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
                       <div>
                         <div className="grid gap-4 md:grid-cols-2">
                           <label className="flex items-center gap-3 text-sm font-medium text-slate-600">
-                            <span className="whitespace-nowrap">Application</span>
+                            <span className="whitespace-nowrap">Platform</span>
                             <select
                               className={`w-[360px] max-w-full flex-none rounded-2xl border border-slate-200/80 px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none ${
                                 !agent.port || applicationLoading
@@ -1001,7 +1001,7 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
                             </select>
                           </label>
                           <label className="flex items-center gap-3 text-sm font-medium text-slate-600">
-                            <span className="whitespace-nowrap">Platform</span>
+                            <span className="whitespace-nowrap">Application</span>
                             <select
                               className={`w-[360px] max-w-full flex-none rounded-2xl border border-slate-200/80 px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none ${
                                 !agent.port || !applicationValue || platformLoading

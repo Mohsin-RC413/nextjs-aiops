@@ -376,7 +376,7 @@ export default function AgentManagementPage() {
                         className="flex w-full items-center justify-center gap-1 text-slate-600"
                         onClick={() => toggleSort("port")}
                       >
-                        Port {sortBy === "port" ? (sortDirection === "asc" ? "▲" : "▼") : ""}
+                        Running at {sortBy === "port" ? (sortDirection === "asc" ? "▲" : "▼") : ""}
                       </button>
                     </th>
                     <th className="px-4 py-3 text-center align-middle">

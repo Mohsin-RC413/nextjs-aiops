@@ -202,7 +202,7 @@ export function AgentActivityLog({ agents, className, title = "Agent activity" }
           <p className="text-xs uppercase tracking-[0.3em] text-slate-700">{title}</p>
           <p className="mt-1 text-sm text-slate-600">
             {muleAgent
-              ? `Streaming from ${muleAgent.name} (port ${muleAgent.port})`
+              ? `Streaming from ${muleAgent.name} (running at ${muleAgent.port})`
               : "No MuleSoft agent started. Please start MuleSoft agent to show logs."}
           </p>
         </div>
