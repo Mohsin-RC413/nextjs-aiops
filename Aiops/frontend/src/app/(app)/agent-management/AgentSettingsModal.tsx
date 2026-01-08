@@ -719,6 +719,8 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
     return () => controller.abort();
   }, [agent.agentId, agent.port, isOpen, platformValue]);
 
+  const hasSingleRuleset = !rulesetLoading && !rulesetError && rulesetItems.length === 1;
+
   return (
     <>
       <button
@@ -733,12 +735,24 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4">
           <div className="w-full max-w-[80vw] min-h-[620px] max-h-[80vh] rounded-[28px] border border-slate-200/80 bg-white/95 p-6 shadow-[0_30px_70px_rgba(15,23,42,0.35)] flex flex-col overflow-hidden">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
+            <div className="space-y-3">
+              <div className="grid grid-cols-[1fr_auto_1fr] items-start">
+                <div />
                 <p className="flex items-center justify-center gap-2 text-sm font-semibold uppercase tracking-[0.32em] text-slate-700">
                   <Settings className="h-3.5 w-3.5" aria-hidden="true" />
                   Agent settings
                 </p>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    className="rounded-full border border-slate-200 px-3 py-1 text-sm text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
+                    onClick={closeModal}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
                 <h3 className="flex items-center gap-2 text-2xl font-semibold text-slate-900">
                   <Bot className="h-6 w-6 text-slate-500" aria-hidden="true" />
                   <span>{agent.name}</span>
@@ -747,14 +761,25 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
                     aria-label={agent.running ? "Online" : "Offline"}
                   />
                 </h3>
+                <div
+                  className={`flex items-center gap-2 rounded-full px-3 py-1 ${
+                    hasSingleRuleset
+                      ? "bg-red-500 text-true-white shadow-[0_10px_20px_rgba(244,67,54,0.25)]"
+                      : "bg-slate-100 text-slate-700"
+                  }`}
+                >
+                  <span className={`text-lg font-semibold ${hasSingleRuleset ? "text-true-white" : "text-slate-900"}`}>
+                    {rulesetError ? "--" : rulesetLoading ? "..." : rulesetItems.length.toString()}
+                  </span>
+                  <span
+                    className={`text-xs font-semibold uppercase tracking-[0.2em] ${
+                      hasSingleRuleset ? "text-true-white" : "text-slate-500"
+                    }`}
+                  >
+                    Rulesets
+                  </span>
+                </div>
               </div>
-              <button
-                type="button"
-                className="rounded-full border border-slate-200 px-3 py-1 text-sm text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
-                onClick={closeModal}
-              >
-                Close
-              </button>
             </div>
             <div className="mt-5 flex flex-wrap gap-2">
               {settingsTabs.map((tab) => {
@@ -783,7 +808,7 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
               <div className="rounded-2xl border border-slate-200/80 bg-white/85 p-5 shadow-inner flex flex-1 flex-col">
                 {settingsTab === "ruleset" ? (
                   <div className="space-y-5">
-                    <div className="flex flex-wrap items-center gap-2 rounded-full border border-slate-200/70 bg-slate-100/70 p-1.5 shadow-sm">
+                    <div className="grid w-full grid-cols-2 gap-2 rounded-full border border-slate-200/70 bg-slate-100/70 p-1.5 shadow-sm">
                       {rulesetTabs.map((tab) => {
                         const isActive = rulesetTab === tab.key;
                         const Icon = tab.icon;
@@ -792,13 +817,13 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
                             key={tab.key}
                             type="button"
                             onClick={() => setRulesetTab(tab.key)}
-                            className={`rounded-full px-4 py-2 text-xs uppercase tracking-[0.28em] transition-colors duration-200 ${
+                            className={`w-full rounded-full px-4 py-2 text-xs uppercase tracking-[0.28em] transition-colors duration-200 ${
                             isActive
                               ? "bg-red-500 text-true-white shadow-[0_10px_20px_rgba(244,67,54,0.25)]"
                               : "text-slate-600 hover:text-slate-900"
                           }`}
                         >
-                          <span className="inline-flex items-center gap-2">
+                          <span className="inline-flex w-full items-center justify-center gap-2">
                             <Icon className="h-3.5 w-3.5" aria-hidden="true" />
                             {tab.label}
                           </span>
