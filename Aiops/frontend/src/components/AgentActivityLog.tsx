@@ -2,7 +2,7 @@
 
 import { AGENT_SERVICE_HOST } from "@/config/api";
 import type { AgentSummary } from "@/lib/useAgents";
-import { Bot, Maximize2, Minimize2 } from "lucide-react";
+import { Bot, Maximize2, Minimize2, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type AgentActivityLogProps = {
@@ -66,6 +66,8 @@ export function AgentActivityLog({ agents, className, title = "Agent activity" }
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [isTypingIndicator, setIsTypingIndicator] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [refreshIndex, setRefreshIndex] = useState(0);
+  const socketRef = useRef<WebSocket | null>(null);
 
   const muleAgent = useMemo(
     () =>
@@ -133,12 +135,17 @@ export function AgentActivityLog({ agents, className, title = "Agent activity" }
       window.clearInterval(typingIntervalRef.current);
       typingIntervalRef.current = null;
     }
+    if (socketRef.current) {
+      socketRef.current.close();
+      socketRef.current = null;
+    }
     if (!muleAgent || !muleAgent.port) {
       return undefined;
     }
 
     const socketUrl = `${getSocketBase()}:${muleAgent.port}/ws/agent?agent_id=${muleAgent.agentId}`;
     const socket = new WebSocket(socketUrl);
+    socketRef.current = socket;
 
     socket.onmessage = (event) => {
       const payload = typeof event.data === "string" ? event.data : String(event.data);
@@ -160,7 +167,10 @@ export function AgentActivityLog({ agents, className, title = "Agent activity" }
     };
 
     return () => {
-      socket.close();
+      if (socketRef.current) {
+        socketRef.current.close();
+        socketRef.current = null;
+      }
       if (timeoutRef.current) {
         window.clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
@@ -173,7 +183,7 @@ export function AgentActivityLog({ agents, className, title = "Agent activity" }
       queueRef.current = [];
       setIsTypingIndicator(false);
     };
-  }, [muleAgent]);
+  }, [muleAgent, refreshIndex]);
 
   useEffect(() => {
     if (!scrollRef.current) return;
@@ -191,6 +201,26 @@ export function AgentActivityLog({ agents, className, title = "Agent activity" }
 
   const logContainerClass = isFullscreen ? "mt-4 flex-1 overflow-y-auto pr-2" : "mt-4 max-h-[360px] overflow-y-auto pr-2";
 
+  const handleRefresh = () => {
+    queueRef.current = [];
+    setLogs([]);
+    if (typingIntervalRef.current) {
+      window.clearInterval(typingIntervalRef.current);
+      typingIntervalRef.current = null;
+    }
+    if (timeoutRef.current) {
+      window.clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    typingRef.current = false;
+    setIsTypingIndicator(false);
+    if (socketRef.current) {
+      socketRef.current.close();
+      socketRef.current = null;
+    }
+    setRefreshIndex((prev) => prev + 1);
+  };
+
   return (
     <div
       className={`flex flex-col rounded-2xl border border-slate-200/70 bg-[#f2f2f2] p-5 text-slate-900 shadow-[0_14px_35px_rgba(15,23,42,0.18)] font-medium tracking-[0.08em] ${
@@ -207,6 +237,15 @@ export function AgentActivityLog({ agents, className, title = "Agent activity" }
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            className="grid h-9 w-9 place-items-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+            onClick={handleRefresh}
+            aria-label="Refresh logs"
+            title="Refresh logs"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </button>
           <span
             className={`h-2.5 w-2.5 rounded-full ${muleAgent ? "bg-emerald-400" : "bg-slate-500"}`}
             aria-label={muleAgent ? "Agent online" : "Agent offline"}
@@ -227,11 +266,7 @@ export function AgentActivityLog({ agents, className, title = "Agent activity" }
         {muleAgent && logs.length === 0 ? (
           <p className="text-sm text-slate-600">Waiting for agent activity...</p>
         ) : null}
-        {!muleAgent ? (
-          <p className="text-sm text-slate-600">
-            No MuleSoft agent started. Please start MuleSoft agent to show logs.
-          </p>
-        ) : (
+        {!muleAgent ? null : (
           <div className="flex flex-col gap-3">
             {isTypingIndicator ? (
               <div className="flex items-center justify-center gap-2 text-slate-300">
