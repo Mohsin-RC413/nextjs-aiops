@@ -2,7 +2,7 @@
 
 import { AGENT_SERVICE_HOST } from "@/config/api";
 import type { AgentSummary } from "@/lib/useAgents";
-import { Bot } from "lucide-react";
+import { Bot, Maximize2, Minimize2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type AgentActivityLogProps = {
@@ -65,6 +65,7 @@ export function AgentActivityLog({ agents, className, title = "Agent activity" }
   const typingIntervalRef = useRef<number | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [isTypingIndicator, setIsTypingIndicator] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const muleAgent = useMemo(
     () =>
@@ -97,8 +98,8 @@ export function AgentActivityLog({ agents, className, title = "Agent activity" }
     }
     const entry: LogEntry = { ...next, displayedMessage: "" };
     setLogs((prev) => {
-      const updated = [...prev, entry];
-      return updated.length > MAX_LOGS ? updated.slice(-MAX_LOGS) : updated;
+      const updated = [entry, ...prev];
+      return updated.length > MAX_LOGS ? updated.slice(0, MAX_LOGS) : updated;
     });
 
     let index = 0;
@@ -155,16 +156,7 @@ export function AgentActivityLog({ agents, className, title = "Agent activity" }
     };
 
     socket.onerror = () => {
-      queueRef.current.push({
-        id: `${Date.now()}-error`,
-        message: "Unable to connect to agent log stream.",
-        displayedMessage: "",
-        time: new Date().toLocaleTimeString(),
-        level: "ERROR",
-      });
-      if (!typingRef.current) {
-        flushQueue();
-      }
+      // Suppress connection errors in the UI.
     };
 
     return () => {
@@ -185,13 +177,25 @@ export function AgentActivityLog({ agents, className, title = "Agent activity" }
 
   useEffect(() => {
     if (!scrollRef.current) return;
-    const container = scrollRef.current;
-    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    scrollRef.current.scrollTo({ top: 0, behavior: "smooth" });
   }, [logs]);
+
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isFullscreen]);
+
+  const logContainerClass = isFullscreen ? "mt-4 flex-1 overflow-y-auto pr-2" : "mt-4 max-h-[360px] overflow-y-auto pr-2";
 
   return (
     <div
-      className={`rounded-2xl border border-slate-200/70 bg-[#f2f2f2] p-5 text-slate-900 shadow-[0_14px_35px_rgba(15,23,42,0.18)] ${className ?? ""}`}
+      className={`flex flex-col rounded-2xl border border-slate-200/70 bg-[#f2f2f2] p-5 text-slate-900 shadow-[0_14px_35px_rgba(15,23,42,0.18)] font-medium tracking-[0.08em] ${
+        isFullscreen ? "fixed inset-0 z-50 rounded-none" : ""
+      } ${className ?? ""}`}
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -202,13 +206,24 @@ export function AgentActivityLog({ agents, className, title = "Agent activity" }
               : "No MuleSoft agent started. Please start MuleSoft agent to show logs."}
           </p>
         </div>
-        <span
-          className={`h-2.5 w-2.5 rounded-full ${muleAgent ? "bg-emerald-400" : "bg-slate-500"}`}
-          aria-label={muleAgent ? "Agent online" : "Agent offline"}
-        />
+        <div className="flex items-center gap-3">
+          <span
+            className={`h-2.5 w-2.5 rounded-full ${muleAgent ? "bg-emerald-400" : "bg-slate-500"}`}
+            aria-label={muleAgent ? "Agent online" : "Agent offline"}
+          />
+          <button
+            type="button"
+            className="grid h-9 w-9 place-items-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+            onClick={() => setIsFullscreen((prev) => !prev)}
+            aria-label={isFullscreen ? "Exit full screen" : "Full screen"}
+            title={isFullscreen ? "Exit full screen" : "Full screen"}
+          >
+            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </button>
+        </div>
       </div>
 
-      <div ref={scrollRef} className="mt-4 max-h-[360px] overflow-y-auto pr-2">
+      <div ref={scrollRef} className={logContainerClass}>
         {muleAgent && logs.length === 0 ? (
           <p className="text-sm text-slate-600">Waiting for agent activity...</p>
         ) : null}
@@ -218,6 +233,13 @@ export function AgentActivityLog({ agents, className, title = "Agent activity" }
           </p>
         ) : (
           <div className="flex flex-col gap-3">
+            {isTypingIndicator ? (
+              <div className="flex items-center justify-center gap-2 text-slate-300">
+                <span className="h-2 w-2 animate-bounce rounded-full bg-slate-300 [animation-delay:0ms]" />
+                <span className="h-2 w-2 animate-bounce rounded-full bg-slate-300 [animation-delay:150ms]" />
+                <span className="h-2 w-2 animate-bounce rounded-full bg-slate-300 [animation-delay:300ms]" />
+              </div>
+            ) : null}
             {logs.map((log) => {
               const level = log.level.toUpperCase();
               const bubbleTone =
@@ -249,13 +271,6 @@ export function AgentActivityLog({ agents, className, title = "Agent activity" }
                 </div>
               );
             })}
-            {isTypingIndicator ? (
-              <div className="flex items-center justify-center gap-2 text-slate-300">
-                <span className="h-2 w-2 animate-bounce rounded-full bg-slate-300 [animation-delay:0ms]" />
-                <span className="h-2 w-2 animate-bounce rounded-full bg-slate-300 [animation-delay:150ms]" />
-                <span className="h-2 w-2 animate-bounce rounded-full bg-slate-300 [animation-delay:300ms]" />
-              </div>
-            ) : null}
           </div>
         )}
       </div>
