@@ -7,6 +7,7 @@ import {
   BookOpen,
   Eye,
   ListChecks,
+  Loader2,
   Pencil,
   PlusCircle,
   Settings,
@@ -66,6 +67,9 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
   const [rulesetItems, setRulesetItems] = useState<Record<string, unknown>[]>([]);
   const [rulesetLoading, setRulesetLoading] = useState(false);
   const [rulesetError, setRulesetError] = useState<string | null>(null);
+  const [rulesetRefreshIndex, setRulesetRefreshIndex] = useState(0);
+  const [deleteCandidate, setDeleteCandidate] = useState<Record<string, unknown> | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   const openModal = () => {
@@ -93,6 +97,8 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
     setRulesetItems([]);
     setRulesetLoading(false);
     setRulesetError(null);
+    setDeleteCandidate(null);
+    setIsDeleting(false);
   };
 
   const closeModal = () => {
@@ -120,6 +126,8 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
     setRulesetItems([]);
     setRulesetLoading(false);
     setRulesetError(null);
+    setDeleteCandidate(null);
+    setIsDeleting(false);
     if (typeof window !== "undefined") {
       const keyPrefix = "agent-settings-";
       const agentToken = `-${agent.agentId}`;
@@ -206,7 +214,8 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
   };
 
   const handleSave = async () => {
-    if (!agent.port) {
+    const port = agent.port;
+    if (!port) {
       return;
     }
     if (!applicationValue || !platformValue || !ticketValue || !frequencyValue) {
@@ -225,7 +234,7 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
     console.log("Ruleset save payload", payload);
     setIsSaving(true);
     try {
-      const response = await fetch(`${getMuleRulesetBase(agent.port)}/ruleset/save`, {
+      const response = await fetch(`${getMuleRulesetBase(port)}/ruleset/save`, {
         method: "POST",
         headers: {
           accept: "application/json",
@@ -233,6 +242,7 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
         },
         body: JSON.stringify(payload),
       });
+      console.log("Ruleset save response", response);
       const text = await response.text();
       try {
         console.log("Ruleset save response", JSON.parse(text));
@@ -243,6 +253,62 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
       console.error("Ruleset save error", error);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDeleteRuleset = (ruleset: Record<string, unknown>) => {
+    setDeleteCandidate(ruleset);
+  };
+
+  const confirmDeleteRuleset = async () => {
+    const port = agent.port;
+    if (!agent.agentId || !port || !deleteCandidate) {
+      return;
+    }
+    setIsDeleting(true);
+    try {
+      const listResponse = await fetch(
+        `${AGENT_SERVICE_HOST}:${port}/agent/mule/ruleset/list/${agent.agentId}`,
+        {
+          method: "GET",
+          headers: {
+            accept: "application/json",
+          },
+        },
+      );
+      if (!listResponse.ok) {
+        throw new Error("Unable to fetch ruleset list.");
+      }
+      const listPayload = await listResponse.json();
+      const list = normalizeRulesets(listPayload);
+      const matchingRuleset =
+        findMatchingRuleset(deleteCandidate, list) ?? (list.length > 0 ? list[0] : null);
+      const rulesetId =
+        getRulesetId(deleteCandidate) ?? (matchingRuleset ? getRulesetId(matchingRuleset) : null);
+      if (!rulesetId) {
+        console.error("Ruleset delete failed: missing ruleset_id.");
+        return;
+      }
+      const deleteUrl = `${AGENT_SERVICE_HOST}/agent/mule/ruleset/delete/${rulesetId}`;
+      let deleteResponse = await fetch(deleteUrl, { method: "DELETE" });
+      if (!deleteResponse.ok) {
+        deleteResponse = await fetch(deleteUrl);
+      }
+      if (!deleteResponse.ok) {
+        throw new Error("Unable to delete ruleset.");
+      }
+      const deleteText = await deleteResponse.text();
+      try {
+        console.log("Ruleset delete response", JSON.parse(deleteText));
+      } catch {
+        console.log("Ruleset delete response", deleteText);
+      }
+      setRulesetRefreshIndex((prev) => prev + 1);
+      setDeleteCandidate(null);
+    } catch (error) {
+      console.error("Ruleset delete error", error);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -287,6 +353,47 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
       }
     }
     return null;
+  };
+
+  const deleteLabel = deleteCandidate
+    ? getRulesetField(deleteCandidate, ["target_name", "targetName", "app_name"])
+    : null;
+
+  const getRulesetId = (ruleset: Record<string, unknown>) => {
+    const candidate = getRulesetField(ruleset, ["ruleset_id", "rulesetId", "rulesetID", "id"]);
+    return candidate !== null && candidate !== undefined && candidate !== "" ? String(candidate) : null;
+  };
+
+  const getComparableValue = (ruleset: Record<string, unknown>, keys: string[]) => {
+    const value = getRulesetField(ruleset, keys);
+    return value !== null && value !== undefined ? String(value).trim().toLowerCase() : null;
+  };
+
+  const findMatchingRuleset = (
+    source: Record<string, unknown>,
+    list: Record<string, unknown>[],
+  ) => {
+    const matchKeys = [
+      ["target_name", "targetName", "app_name"],
+      ["target_value", "targetValue"],
+      ["target_type", "targetType"],
+    ];
+    return (
+      list.find((item) => {
+        let matched = false;
+        for (const keys of matchKeys) {
+          const sourceValue = getComparableValue(source, keys);
+          const itemValue = getComparableValue(item, keys);
+          if (sourceValue && itemValue) {
+            if (sourceValue !== itemValue) {
+              return false;
+            }
+            matched = true;
+          }
+        }
+        return matched;
+      }) ?? null
+    );
   };
 
   const formatRulesetValue = (value: unknown) => {
@@ -355,7 +462,8 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
     if (!isOpen) {
       return;
     }
-    if (!agent.agentId || !agent.port) {
+    const port = agent.port;
+    if (!agent.agentId || !port) {
       setApplicationOptions([]);
       setApplicationLoading(false);
       return;
@@ -364,7 +472,7 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
     const load = async () => {
       setApplicationLoading(true);
       try {
-        const response = await fetch(`${getMuleDropdownBase(agent.port)}/target-types`, {
+        const response = await fetch(`${getMuleDropdownBase(port)}/target-types`, {
           method: "POST",
           headers: {
             accept: "application/json",
@@ -398,7 +506,8 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
     if (!isOpen) {
       return;
     }
-    if (!agent.agentId || !agent.port || !applicationValue) {
+    const port = agent.port;
+    if (!agent.agentId || !port || !applicationValue) {
       setPlatformOptions([]);
       setPlatformLoading(false);
       return;
@@ -407,7 +516,7 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
     const load = async () => {
       setPlatformLoading(true);
       try {
-        const response = await fetch(`${getMuleDropdownBase(agent.port)}/targets`, {
+        const response = await fetch(`${getMuleDropdownBase(port)}/targets`, {
           method: "POST",
           headers: {
             accept: "application/json",
@@ -492,7 +601,8 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
     if (!isOpen) {
       return;
     }
-    if (!agent.agentId || !agent.port || !platformValue) {
+    const port = agent.port;
+    if (!agent.agentId || !port || !platformValue) {
       setStatusOptions([]);
       setStatusLoading(false);
       return;
@@ -501,7 +611,7 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
     const load = async () => {
       setStatusLoading(true);
       try {
-        const response = await fetch(`${getMuleDropdownBase(agent.port)}/status`, {
+        const response = await fetch(`${getMuleDropdownBase(port)}/status`, {
           method: "POST",
           headers: {
             accept: "application/json",
@@ -538,7 +648,8 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
     if (!isOpen || settingsTab !== "ruleset" || rulesetTab !== "view") {
       return;
     }
-    if (!agent.agentId || !agent.port) {
+    const port = agent.port;
+    if (!agent.agentId || !port) {
       setRulesetItems([]);
       setRulesetLoading(false);
       setRulesetError(null);
@@ -550,7 +661,7 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
       setRulesetError(null);
       try {
         const response = await fetch(
-          `${getMuleRulesetBase(agent.port)}/ruleset/list/${agent.agentId}`,
+          `${getMuleRulesetBase(port)}/ruleset/list/${agent.agentId}`,
           {
             method: "GET",
             headers: {
@@ -579,13 +690,14 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
     };
     load();
     return () => controller.abort();
-  }, [agent.agentId, agent.port, isOpen, rulesetTab, settingsTab]);
+  }, [agent.agentId, agent.port, isOpen, rulesetRefreshIndex, rulesetTab, settingsTab]);
 
   useEffect(() => {
     if (!isOpen) {
       return;
     }
-    if (!agent.agentId || !agent.port || !platformValue) {
+    const port = agent.port;
+    if (!agent.agentId || !port || !platformValue) {
       setNotificationOptions([]);
       setNotificationLoading(false);
       return;
@@ -594,7 +706,7 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
     const load = async () => {
       setNotificationLoading(true);
       try {
-        const response = await fetch(`${getMuleDropdownBase(agent.port)}/notifications`, {
+        const response = await fetch(`${getMuleDropdownBase(port)}/notifications`, {
           method: "POST",
           headers: {
             accept: "application/json",
@@ -631,7 +743,8 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
     if (!isOpen) {
       return;
     }
-    if (!agent.agentId || !agent.port || !platformValue) {
+    const port = agent.port;
+    if (!agent.agentId || !port || !platformValue) {
       setFrequencyOptions([]);
       setFrequencyLoading(false);
       return;
@@ -640,7 +753,7 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
     const load = async () => {
       setFrequencyLoading(true);
       try {
-        const response = await fetch(`${getMuleDropdownBase(agent.port)}/frequency`, {
+        const response = await fetch(`${getMuleDropdownBase(port)}/frequency`, {
           method: "POST",
           headers: {
             accept: "application/json",
@@ -677,7 +790,8 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
     if (!isOpen) {
       return;
     }
-    if (!agent.agentId || !agent.port || !platformValue) {
+    const port = agent.port;
+    if (!agent.agentId || !port || !platformValue) {
       setTicketOptions([]);
       setTicketLoading(false);
       return;
@@ -686,7 +800,7 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
     const load = async () => {
       setTicketLoading(true);
       try {
-        const response = await fetch(`${getMuleDropdownBase(agent.port)}/ticket`, {
+        const response = await fetch(`${getMuleDropdownBase(port)}/ticket`, {
           method: "POST",
           headers: {
             accept: "application/json",
@@ -914,9 +1028,15 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
                                         {formatRulesetValue(targetType)}
                                       </p>
                                     </div>
-                                    <span className="inline-flex items-center justify-center rounded-full border border-red-200 bg-red-50 p-1.5 text-red-600">
+                                    <button
+                                      type="button"
+                                      className="inline-flex items-center justify-center rounded-full border border-red-200 bg-red-50 p-1.5 text-red-600 transition hover:border-red-300 hover:bg-red-100"
+                                      onClick={() => handleDeleteRuleset(ruleset)}
+                                      aria-label="Delete ruleset"
+                                      title="Delete ruleset"
+                                    >
                                       <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                                    </span>
+                                    </button>
                                   </div>
                                   <div className="mt-4 space-y-4">
                                     <div className="grid gap-4 md:grid-cols-3">
@@ -1168,6 +1288,37 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
               )}
             </div>
           </div>
+          {deleteCandidate ? (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 p-4">
+              <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-[0_20px_50px_rgba(15,23,42,0.3)]">
+                <h4 className="text-lg font-semibold text-slate-900">Delete Ruleset</h4>
+                <p className="mt-2 text-sm text-slate-600">
+                  {deleteLabel
+                    ? `Are you sure you want to delete ${String(deleteLabel)}?`
+                    : "Are you sure you want to delete this ruleset?"}
+                </p>
+                <div className="mt-6 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+                    onClick={() => setDeleteCandidate(null)}
+                    disabled={isDeleting}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-full bg-red-500 px-4 py-2 text-sm font-semibold text-true-white shadow-[0_10px_20px_rgba(244,67,54,0.25)] transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-red-300"
+                    onClick={confirmDeleteRuleset}
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    {isDeleting ? "Deleting..." : "Delete"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
     </>
