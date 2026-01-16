@@ -3,8 +3,8 @@
 import { AGENT_SERVICE_HOST } from "@/config/api";
 import { AgentSummary } from "@/lib/useAgents";
 import {
-  Bot,
   BookOpen,
+  Bot,
   Eye,
   ListChecks,
   Loader2,
@@ -262,38 +262,20 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
 
   const confirmDeleteRuleset = async () => {
     const port = agent.port;
-    if (!agent.agentId || !port || !deleteCandidate) {
+    if (!deleteCandidate || !port) {
       return;
     }
     setIsDeleting(true);
     try {
-      const listResponse = await fetch(
-        `${AGENT_SERVICE_HOST}:${port}/agent/mule/ruleset/list/${agent.agentId}`,
-        {
-          method: "GET",
-          headers: {
-            accept: "application/json",
-          },
-        },
-      );
-      if (!listResponse.ok) {
-        throw new Error("Unable to fetch ruleset list.");
-      }
-      const listPayload = await listResponse.json();
-      const list = normalizeRulesets(listPayload);
-      const matchingRuleset =
-        findMatchingRuleset(deleteCandidate, list) ?? (list.length > 0 ? list[0] : null);
-      const rulesetId =
-        getRulesetId(deleteCandidate) ?? (matchingRuleset ? getRulesetId(matchingRuleset) : null);
+      const rulesetId = getRulesetId(deleteCandidate);
       if (!rulesetId) {
         console.error("Ruleset delete failed: missing ruleset_id.");
         return;
       }
-      const deleteUrl = `${AGENT_SERVICE_HOST}/agent/mule/ruleset/delete/${rulesetId}`;
-      let deleteResponse = await fetch(deleteUrl, { method: "DELETE" });
-      if (!deleteResponse.ok) {
-        deleteResponse = await fetch(deleteUrl);
-      }
+      const deleteUrl = `${AGENT_SERVICE_HOST}:${port}/agent/mule/ruleset/delete/${rulesetId}`;
+      console.log("Ruleset delete request url", deleteUrl);
+      console.log("Ruleset delete request body", null);
+      const deleteResponse = await fetch(deleteUrl, { method: "DELETE" });
       if (!deleteResponse.ok) {
         throw new Error("Unable to delete ruleset.");
       }
@@ -364,37 +346,6 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
     return candidate !== null && candidate !== undefined && candidate !== "" ? String(candidate) : null;
   };
 
-  const getComparableValue = (ruleset: Record<string, unknown>, keys: string[]) => {
-    const value = getRulesetField(ruleset, keys);
-    return value !== null && value !== undefined ? String(value).trim().toLowerCase() : null;
-  };
-
-  const findMatchingRuleset = (
-    source: Record<string, unknown>,
-    list: Record<string, unknown>[],
-  ) => {
-    const matchKeys = [
-      ["target_name", "targetName", "app_name"],
-      ["target_value", "targetValue"],
-      ["target_type", "targetType"],
-    ];
-    return (
-      list.find((item) => {
-        let matched = false;
-        for (const keys of matchKeys) {
-          const sourceValue = getComparableValue(source, keys);
-          const itemValue = getComparableValue(item, keys);
-          if (sourceValue && itemValue) {
-            if (sourceValue !== itemValue) {
-              return false;
-            }
-            matched = true;
-          }
-        }
-        return matched;
-      }) ?? null
-    );
-  };
 
   const formatRulesetValue = (value: unknown) => {
     if (Array.isArray(value)) {
