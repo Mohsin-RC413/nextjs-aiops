@@ -35,17 +35,12 @@ type AgentApiItem = {
   type?: string;
   version?: string;
   port?: number;
+  agent_port?: number;
+  agentPort?: number;
   start_time?: string | null;
   stop_time?: string | null;
   created_at?: string | null;
 };
-
-type AgentOverride = {
-  running: boolean;
-  port?: number | null;
-};
-
-const STORAGE_KEY = "aiops-agent-overrides";
 
 export const formatCurrentTime = () => {
   const now = new Date();
@@ -66,6 +61,7 @@ const toAgentSummary = (agent: AgentApiItem): AgentSummary => {
   const lastActionTime = running
     ? startTime ?? formatCurrentTime()
     : stopTime ?? createdAt ?? formatCurrentTime();
+  const resolvedPort = agent.port ?? agent.agent_port ?? agent.agentPort ?? null;
   return {
     agentId: agent.agentId,
     name: agent.name ?? "Unknown agent",
@@ -76,7 +72,7 @@ const toAgentSummary = (agent: AgentApiItem): AgentSummary => {
     enterprise: agent.enterprise ?? agent.subType ?? null,
     version: agent.version ?? "v1.0.0",
     lastActionTime,
-    port: agent.port ?? null,
+    port: resolvedPort,
     startTime,
     stopTime,
     createdAt,
@@ -84,31 +80,7 @@ const toAgentSummary = (agent: AgentApiItem): AgentSummary => {
   };
 };
 
-const loadOverrides = (): Record<number, AgentOverride> => {
-  if (typeof window === "undefined") {
-    return {};
-  }
-  const stored = window.localStorage.getItem(STORAGE_KEY);
-  if (!stored) {
-    return {};
-  }
-  try {
-    return JSON.parse(stored);
-  } catch {
-    return {};
-  }
-};
-
-const saveOverrides = (overrides: Record<number, AgentOverride>) => {
-  if (typeof window === "undefined") {
-    return;
-  }
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(overrides));
-};
-
 export const useAgents = () => {
-  const [overrides, setOverrides] = useState<Record<number, AgentOverride>>(() => loadOverrides());
-
   const protectedAgents = useMemo<AgentSummary[]>(() => {
     const now = formatCurrentTime();
     return [
@@ -131,41 +103,15 @@ export const useAgents = () => {
     ];
   }, []);
 
-  const removeOverride = useCallback((agentId: number) => {
-    setOverrides((prev) => {
-      const next = { ...prev };
-      delete next[agentId];
-      saveOverrides(next);
-      return next;
-    });
-  }, []);
-
-  const applyOverride = useCallback(
-    (agent: AgentSummary): AgentSummary => {
-      const override = overrides[agent.agentId];
-      if (!override) {
-        return agent;
-      }
-      return {
-        ...agent,
-        running: override.running,
-        status: override.running ? "healthy" : "warning",
-        port: override.port ?? agent.port,
-      };
-    },
-    [overrides],
-  );
-
   const ensureProtectedAgents = useCallback(
     (incoming: AgentSummary[]): AgentSummary[] => {
       const existingNames = new Set(incoming.map((agent) => agent.name.toLowerCase()));
       const existingIds = new Set(incoming.map((agent) => agent.agentId));
       const missingProtected = protectedAgents
-        .filter((agent) => !existingIds.has(agent.agentId) && !existingNames.has(agent.name.toLowerCase()))
-        .map(applyOverride);
+        .filter((agent) => !existingIds.has(agent.agentId) && !existingNames.has(agent.name.toLowerCase()));
       return [...incoming, ...missingProtected];
     },
-    [applyOverride, protectedAgents],
+    [protectedAgents],
   );
 
   const [agents, setAgents] = useState<AgentSummary[]>(() => ensureProtectedAgents([]));
@@ -186,7 +132,7 @@ export const useAgents = () => {
       }
       const data = await response.json();
       if (Array.isArray(data.agents)) {
-        const incomingAgents = data.agents.map(toAgentSummary).map(applyOverride);
+        const incomingAgents = data.agents.map(toAgentSummary);
         setAgents(ensureProtectedAgents(incomingAgents));
         return;
       }
@@ -198,25 +144,11 @@ export const useAgents = () => {
     } finally {
       setLoading(false);
     }
-  }, [applyOverride, ensureProtectedAgents]);
+  }, [ensureProtectedAgents]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
-
-  const updateOverride = useCallback((agentId: number, running: boolean, port: number | null = null) => {
-    setOverrides((prev) => {
-      const next = {
-        ...prev,
-        [agentId]: {
-          running,
-          port: port ?? prev[agentId]?.port ?? null,
-        },
-      };
-      saveOverrides(next);
-      return next;
-    });
-  }, []);
 
   const performAgentAction = useCallback(
     async (agentId: number, action: "start" | "stop") => {
@@ -249,12 +181,11 @@ export const useAgents = () => {
               : agent,
           ),
         );
-        updateOverride(agentId, action === "start", action === "start" ? serverPort ?? null : null);
       } catch (err) {
         console.error(`${action} agent error`, err);
       }
     },
-    [updateOverride],
+    [],
   );
 
   const deleteAgent = useCallback(
@@ -279,13 +210,12 @@ export const useAgents = () => {
           throw new Error("Unable to delete agent");
         }
         setAgents((prev) => prev.filter((agent) => agent.agentId !== agentId));
-        removeOverride(agentId);
       } catch (err) {
         console.error("Delete agent error", err);
         throw err;
       }
     },
-    [protectedAgents, removeOverride],
+    [protectedAgents],
   );
 
   const addAgent = useCallback(

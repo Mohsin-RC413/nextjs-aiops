@@ -29,8 +29,19 @@ const rulesetTabs = [
 ] as const;
 type RulesetTab = (typeof rulesetTabs)[number]["key"];
 
-const getMuleDropdownBase = (port: number) => `${AGENT_SERVICE_HOST}:${port}/agent/mule/dropdown`;
-const getMuleRulesetBase = (port: number) => `${AGENT_SERVICE_HOST}:${port}/agent/mule`;
+const buildAgentServiceUrl = (port: number, path: string) => {
+  const base = AGENT_SERVICE_HOST.endsWith("/") ? AGENT_SERVICE_HOST : `${AGENT_SERVICE_HOST}/`;
+  const url = new URL(base);
+  url.port = String(port);
+  const basePath = url.pathname.replace(/\/$/, "");
+  const nextPath = path.startsWith("/") ? path : `/${path}`;
+  url.pathname = `${basePath}${nextPath}`;
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+};
+const getMuleDropdownBase = (port: number) => buildAgentServiceUrl(port, "/agent/mule/dropdown");
+const getMuleRulesetBase = (port: number) => buildAgentServiceUrl(port, "/agent/mule");
 
 const getSettingsStorageKey = (
   suffix: "application" | "platform" | "status" | "ticket" | "notifications" | "frequency",
@@ -272,7 +283,7 @@ export function AgentSettingsModal({ agent }: AgentSettingsModalProps) {
         console.error("Ruleset delete failed: missing ruleset_id.");
         return;
       }
-      const deleteUrl = `${AGENT_SERVICE_HOST}:${port}/agent/mule/ruleset/delete/${rulesetId}`;
+      const deleteUrl = buildAgentServiceUrl(port, `/agent/mule/ruleset/delete/${rulesetId}`);
       console.log("Ruleset delete request url", deleteUrl);
       console.log("Ruleset delete request body", null);
       const deleteResponse = await fetch(deleteUrl, { method: "DELETE" });
