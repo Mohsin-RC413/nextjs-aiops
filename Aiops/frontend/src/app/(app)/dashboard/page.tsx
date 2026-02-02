@@ -18,9 +18,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import ReactMarkdown from "react-markdown";
 import topAnimation from "../../../../Guy talking to Robot _ AI Help.json";
 
-const GROQ_API_KEY = "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";
-const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-const GROQ_MODEL = "openai/gpt-oss-120b";
 const AWS_AGENT_API_URL = "https://b82fu8316m.execute-api.us-east-1.amazonaws.com/dev/invoke";
 const AWS_SESSION_STORAGE_KEY = "aiops-aws-session-id";
 
@@ -236,60 +233,6 @@ export default function DashboardPage() {
   const agentMixCardRef = useRef<HTMLDivElement | null>(null);
   const agentMixHoverRef = useRef<"online" | "offline" | null>(null);
 
-  const formatServiceNowIncident = (incident: Record<string, unknown>): string => {
-    const number = incident.number ?? incident.sys_id ?? "Unknown ID";
-    const short = incident.short_description ?? incident.description ?? "";
-    const status = incident.status ?? incident.state;
-    const priority = incident.priority ?? incident.urgency;
-    const openedAt = incident.opened_at;
-    const meta: string[] = [];
-    if (status) meta.push(`status ${status}`);
-    if (priority) meta.push(`priority ${priority}`);
-    if (typeof openedAt === "string" && isProbablyDateString(openedAt)) {
-      meta.push(`opened ${new Date(openedAt).toLocaleString()}`);
-    }
-    const metaLabel = meta.length ? ` (${meta.join(" | ")})` : "";
-    const description = short ? ` — ${short}` : "";
-    return `- ${String(number)}${metaLabel}${description}`;
-  };
-
-  const formatServiceNowChatResponse = (payload: unknown): string | null => {
-    if (!payload || typeof payload !== "object") return null;
-    const root = payload as Record<string, unknown>;
-    const intent = typeof root.intent === "string" ? root.intent : null;
-    const result =
-      typeof root.result === "object" && root.result !== null ? (root.result as Record<string, unknown>) : null;
-    const incidents = Array.isArray((result as any)?.incidents) ? ((result as any).incidents as any[]) : null;
-    const countRaw =
-      (result as any)?.today_count ??
-      (result as any)?.count ??
-      (result as any)?.total_incidents ??
-      (Array.isArray(incidents) ? incidents.length : null);
-    if (incidents && incidents.length) {
-      const scope = intent && intent.includes("today") ? "today" : "";
-      const count = typeof countRaw === "number" ? countRaw : incidents.length;
-      const header = `I found ${count} incident${count === 1 ? "" : "s"}${scope ? ` ${scope}` : ""}.`;
-      const lines = incidents.map((incident) => formatServiceNowIncident((incident ?? {}) as Record<string, unknown>));
-      return [header, ...lines].filter(Boolean).join("\n");
-    }
-    const resultMessage = (result as any)?.message;
-    if (typeof resultMessage === "string") {
-      return resultMessage;
-    }
-    const rootMessage = (root as any)?.message;
-    if (typeof rootMessage === "string") {
-      return rootMessage;
-    }
-    if (result && typeof result === "object") {
-      const simple = result as Record<string, unknown>;
-      const summary = simple.summary ?? simple.detail;
-      if (typeof summary === "string") {
-        return summary;
-      }
-    }
-    return null;
-  };
-
   const formatMuleResponse = (raw: string): string => {
     if (!raw) return "No response from agent.";
     try {
@@ -331,53 +274,6 @@ export default function DashboardPage() {
       }
     }
     return null;
-  };
-  const serializeAgentResponse = (payload: unknown): string => {
-    if (payload === null || payload === undefined) return "No response from agent.";
-    if (typeof payload === "string") return payload;
-    try {
-      return JSON.stringify(payload, null, 2);
-    } catch {
-      return String(payload);
-    }
-  };
-  const getGroqResponse = async (userQuestion: string, agentRawResponse: unknown): Promise<string | null> => {
-    if (!GROQ_API_KEY) return null;
-    try {
-      const response = await fetch(GROQ_API_URL, {
-        method: "POST",
-        headers: {
-          accept: "application/json",
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${GROQ_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: GROQ_MODEL,
-          temperature: 0.3,
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are an AI assistant summarizing and extracting key insights from ServiceNow agent responses. Reply in concise natural language only. Do not return tables, code blocks, or raw JSON. Provide a brief, human-readable answer.",
-            },
-            {
-              role: "user",
-              content: `User question:\n${userQuestion}\n\nAgent raw response (JSON):\n${serializeAgentResponse(agentRawResponse)}`,
-            },
-          ],
-        }),
-      });
-      const llmJson = await response.json().catch(() => null);
-      if (!response.ok) {
-        console.error("Groq LLM error response", llmJson);
-        return null;
-      }
-      const llmReply = llmJson?.choices?.[0]?.message?.content;
-      return typeof llmReply === "string" ? llmReply : serializeAgentResponse(llmReply);
-    } catch (err) {
-      console.error("Groq LLM request failed", err);
-      return null;
-    }
   };
   const agentMixGradient = useMemo(() => {
     const onlineColor = "#22c55e";
@@ -670,11 +566,19 @@ export default function DashboardPage() {
           },
           body: JSON.stringify(serviceNowPayload),
         });
-        const serviceNowJson = await response.json().catch(() => null);
-        console.log("ServiceNow chat response", { status: response.status, data: serviceNowJson });
-        data = serviceNowJson;
+        const serviceNowText = await response.text().catch(() => "");
+        console.log("ServiceNow chat response", { status: response.status, data: serviceNowText });
+        data = serviceNowText;
         if (!response.ok) {
-          const msg = serviceNowJson?.message ?? "Unable to reach ServiceNow agent";
+          let msg = serviceNowText || "Unable to reach ServiceNow agent";
+          try {
+            const parsed = JSON.parse(serviceNowText);
+            if (parsed && typeof parsed.message === "string") {
+              msg = parsed.message;
+            }
+          } catch {
+            // keep raw message
+          }
           throw new Error(msg);
         }
       } else {
@@ -695,17 +599,10 @@ export default function DashboardPage() {
         }
       }
       await new Promise((resolve) => setTimeout(resolve, 500));
-      const serviceNowReply = isServiceNowAgent ? formatServiceNowChatResponse(data) : null;
+      const serviceNowReply = isServiceNowAgent ? extractAgentReply(data) : null;
       const muleReply = isMuleAgent ? formatMuleChatResponse(data) : null;
       const rawReply = serviceNowReply ?? muleReply ?? extractAgentReply(data);
-      const llmReply =
-        isAws || isServiceNowAgent || isMuleAgent ? null : await getGroqResponse(userMessage.text, data);
-      if (llmReply) {
-        console.log("Groq LLM chat response", llmReply);
-      } else if (!isAws) {
-        console.log("Groq LLM chat response unavailable");
-      }
-      const finalText = isAws ? rawReply : llmReply ?? rawReply;
+      const finalText = rawReply;
       setChatMessages((prev) => [
         ...prev,
         { speaker: `${chatAgent.name}`, text: finalText, id: Date.now() + 3 },
