@@ -168,7 +168,7 @@ export default function DashboardPage() {
   const lottieReady = useLottieLoader();
   const [typed, setTyped] = useState("");
 
-  const { agents, performAgentAction } = useAgents();
+  const { agents, performAgentAction, loading: agentsLoading } = useAgents();
   const [selectedAgent, setSelectedAgent] = useState<AgentSummary | null>(null);
   const [chatAgent, setChatAgent] = useState<AgentSummary | null>(null);
   const [isChatMaximized, setIsChatMaximized] = useState(false);
@@ -213,6 +213,9 @@ export default function DashboardPage() {
   const [draftMessage, setDraftMessage] = useState("");
   const [typingAnimation, setTypingAnimation] = useState<{ messageId: number; text: string } | null>(null);
   const [isTyping, setIsTyping] = useState(false);
+  const activeChatAgentIdRef = useRef<string | null>(null);
+  const chatRequestIdRef = useRef(0);
+  const chatAbortRef = useRef<AbortController | null>(null);
   const [awsSessionId, setAwsSessionId] = useState<string | null>(null);
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -320,9 +323,24 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!chatAgent) return;
+    chatAbortRef.current?.abort();
+    chatAbortRef.current = null;
+    chatRequestIdRef.current += 1;
+    activeChatAgentIdRef.current = String(chatAgent.agentId ?? chatAgent.name ?? "");
     setChatMessages([]);
     setDraftMessage("");
+    setTypingAnimation(null);
+    setIsTyping(false);
     queueAgentResponse("I am Agent and I'm ready to help.");
+  }, [chatAgent]);
+  useEffect(() => {
+    if (chatAgent) return;
+    chatAbortRef.current?.abort();
+    chatAbortRef.current = null;
+    chatRequestIdRef.current += 1;
+    activeChatAgentIdRef.current = null;
+    setTypingAnimation(null);
+    setIsTyping(false);
   }, [chatAgent]);
 
   useEffect(() => {
@@ -453,10 +471,17 @@ export default function DashboardPage() {
 
   const handleSendMessage = async () => {
     if (!chatAgent || !draftMessage.trim()) return;
-    const isMuleAgent =
-      (chatAgent.enterprise ?? chatAgent.type ?? "").toLowerCase().includes("mule");
-    const isServiceNowAgent =
-      (chatAgent.enterprise ?? chatAgent.type ?? "").toLowerCase().includes("servicenow");
+    const agentSnapshotId = String(chatAgent.agentId ?? chatAgent.name ?? "");
+    const requestId = chatRequestIdRef.current + 1;
+    chatRequestIdRef.current = requestId;
+    activeChatAgentIdRef.current = agentSnapshotId;
+    chatAbortRef.current?.abort();
+    const controller = new AbortController();
+    chatAbortRef.current = controller;
+    const agentKey = (chatAgent.enterprise ?? chatAgent.type ?? chatAgent.name ?? "").toLowerCase();
+    const isMuleAgent = agentKey.includes("mule");
+    const isServiceNowAgent = agentKey.includes("servicenow");
+    const isMqAgent = agentKey.includes("mq");
     const isAws = isAwsAgent(chatAgent);
     const port = chatAgent.port;
     const userMessage = {
@@ -504,6 +529,7 @@ export default function DashboardPage() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify(payload),
+          signal: controller.signal,
         });
         const awsJson = await response.json().catch(() => null);
         console.log("AWS chat response", {
@@ -541,6 +567,7 @@ export default function DashboardPage() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify(mulePayload),
+          signal: controller.signal,
         });
         const muleJson = await response.json().catch(() => null);
         console.log("Mule chat response", { status: response.status, data: muleJson });
@@ -565,6 +592,7 @@ export default function DashboardPage() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify(serviceNowPayload),
+          signal: controller.signal,
         });
         const serviceNowText = await response.text().catch(() => "");
         console.log("ServiceNow chat response", { status: response.status, data: serviceNowText });
@@ -573,6 +601,39 @@ export default function DashboardPage() {
           let msg = serviceNowText || "Unable to reach ServiceNow agent";
           try {
             const parsed = JSON.parse(serviceNowText);
+            if (parsed && typeof parsed.message === "string") {
+              msg = parsed.message;
+            }
+          } catch {
+            // keep raw message
+          }
+          throw new Error(msg);
+        }
+      } else if (isMqAgent) {
+        if (!port) {
+          throw new Error("Agent port is unavailable");
+        }
+        const mqEndpoint = `${AGENT_HELLO_HOST}:${port}/agent/mq/chat`;
+        const mqPayload = {
+          message: userMessage.text,
+          agent_id: String(chatAgent.agentId ?? chatAgent.name ?? ""),
+        };
+        const response = await fetch(mqEndpoint, {
+          method: "POST",
+          headers: {
+            accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(mqPayload),
+          signal: controller.signal,
+        });
+        const mqText = await response.text().catch(() => "");
+        console.log("MQ chat response", { status: response.status, data: mqText });
+        data = mqText;
+        if (!response.ok) {
+          let msg = mqText || "Unable to reach MQ agent";
+          try {
+            const parsed = JSON.parse(mqText);
             if (parsed && typeof parsed.message === "string") {
               msg = parsed.message;
             }
@@ -592,6 +653,7 @@ export default function DashboardPage() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ message: userMessage.text }),
+          signal: controller.signal,
         });
         data = await response.json();
         if (!response.ok) {
@@ -599,6 +661,13 @@ export default function DashboardPage() {
         }
       }
       await new Promise((resolve) => setTimeout(resolve, 500));
+      if (
+        activeChatAgentIdRef.current !== agentSnapshotId ||
+        chatRequestIdRef.current !== requestId ||
+        controller.signal.aborted
+      ) {
+        return;
+      }
       const serviceNowReply = isServiceNowAgent ? extractAgentReply(data) : null;
       const muleReply = isMuleAgent ? formatMuleChatResponse(data) : null;
       const rawReply = serviceNowReply ?? muleReply ?? extractAgentReply(data);
@@ -609,6 +678,9 @@ export default function DashboardPage() {
       ]);
       setIsTyping(false);
     } catch (error) {
+      if (controller.signal.aborted) {
+        return;
+      }
       console.error("Chat error", error);
       const fallback = "I couldn't reach the assistant, please try again later.";
       setChatMessages((prev) => [
@@ -1404,7 +1476,12 @@ export default function DashboardPage() {
               </p>
             </div>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {visibleAgents.length === 0 ? (
+              {agentsLoading ? (
+                <div className="col-span-full flex items-center justify-center gap-3 py-6 text-white/70">
+                  <LoadingSpinner />
+                  <span className="text-sm">Loading agents…</span>
+                </div>
+              ) : visibleAgents.length === 0 ? (
                 <p className="col-span-full text-center text-sm text-white/70">No agents to display.</p>
               ) : (
                 visibleAgents.map((agent) => (
