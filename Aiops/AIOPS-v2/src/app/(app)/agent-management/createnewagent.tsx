@@ -10,16 +10,25 @@ const AGENT_API_BASE = AGENT_API_BASE_URL.endsWith("/")
 const AGENT_VALIDATE_URL = `${AGENT_API_BASE}/aiops/agent/validate`;
 const AGENT_TYPES_URL = `${AGENT_API_BASE}/aiops/agent/types`;
 const AGENT_SUBTYPES_URL = `${AGENT_API_BASE}/aiops/agent/subtypes`;
+const AGENT_ACTIONS_URL = `${AGENT_API_BASE}/aiops/agent/actions`;
+const AGENT_CREDENTIALS_URL = `${AGENT_API_BASE}/aiops/agent/credential-schema`;
+
+type AgentType = { code: string; name: string };
+type AgentAction = { action_code: string; action_name: string };
+type CredentialField = {
+  field: string;
+  type: string;
+  label: string;
+  value?: string;
+};
 
 export default function CreateNewAgent() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [agentName, setAgentName] = useState("");
   const [isValidating, setIsValidating] = useState(false);
   const [validationError, setValidationError] = useState("");
-  const [agentTypes, setAgentTypes] = useState<
-    Array<{ code: string; name: string }>
-  >([]);
+  const [agentTypes, setAgentTypes] = useState<AgentType[]>([]);
   const [agentTypesLoading, setAgentTypesLoading] = useState(false);
   const [agentTypesError, setAgentTypesError] = useState("");
   const [selectedAgentType, setSelectedAgentType] = useState("");
@@ -27,6 +36,20 @@ export default function CreateNewAgent() {
   const [enterpriseLoading, setEnterpriseLoading] = useState(false);
   const [enterpriseError, setEnterpriseError] = useState("");
   const [selectedEnterprise, setSelectedEnterprise] = useState("");
+  const [actionsLoading, setActionsLoading] = useState(false);
+  const [actionsError, setActionsError] = useState("");
+  const [availableActions, setAvailableActions] = useState<AgentAction[]>([]);
+  const [selectedActions, setSelectedActions] = useState<AgentAction[]>([]);
+  const [availableSelection, setAvailableSelection] = useState<string[]>([]);
+  const [selectedSelection, setSelectedSelection] = useState<string[]>([]);
+  const [credentialSchema, setCredentialSchema] = useState<CredentialField[]>(
+    []
+  );
+  const [credentialValues, setCredentialValues] = useState<
+    Record<string, string>
+  >({});
+  const [credentialsLoading, setCredentialsLoading] = useState(false);
+  const [credentialsError, setCredentialsError] = useState("");
 
   const trimmedAgentName = agentName.trim();
   const isNextDisabled = trimmedAgentName.length === 0 || isValidating;
@@ -61,6 +84,18 @@ export default function CreateNewAgent() {
       window.localStorage.removeItem("enterprise");
     }
   }, [selectedEnterprise, isModalOpen]);
+
+  useEffect(() => {
+    if (!isModalOpen || typeof window === "undefined") {
+      return;
+    }
+    if (selectedActions.length > 0) {
+      const codes = selectedActions.map((action) => action.action_code);
+      window.localStorage.setItem("actioncodes", JSON.stringify(codes));
+    } else {
+      window.localStorage.removeItem("actioncodes");
+    }
+  }, [selectedActions, isModalOpen]);
 
   useEffect(() => {
     if (!isModalOpen || step !== 2) {
@@ -157,6 +192,100 @@ export default function CreateNewAgent() {
     return () => controller.abort();
   }, [isModalOpen, step, selectedAgentType]);
 
+  useEffect(() => {
+    if (!isModalOpen || step !== 3 || !selectedEnterprise) {
+      return;
+    }
+
+    const controller = new AbortController();
+
+    const loadActions = async () => {
+      setActionsLoading(true);
+      setActionsError("");
+      setAvailableActions([]);
+      setSelectedActions([]);
+      setAvailableSelection([]);
+      setSelectedSelection([]);
+
+      try {
+        const url = `${AGENT_ACTIONS_URL}?subType=${encodeURIComponent(
+          selectedEnterprise
+        )}&orgKey=${encodeURIComponent(AGENT_ORG_KEY)}`;
+        const response = await fetch(url, {
+          headers: { accept: "application/json" },
+          signal: controller.signal,
+        });
+        const data = await response.json();
+        console.log("Agent actions response:", {
+          ok: response.ok,
+          status: response.status,
+          data,
+        });
+
+        if (response.ok && Array.isArray(data?.actions)) {
+          setAvailableActions(data.actions);
+        } else {
+          setActionsError(data?.message || "Unable to load actions.");
+        }
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+        setActionsError("Unable to load actions.");
+      } finally {
+        setActionsLoading(false);
+      }
+    };
+
+    const loadCredentials = async () => {
+      setCredentialsLoading(true);
+      setCredentialsError("");
+      setCredentialSchema([]);
+      setCredentialValues({});
+
+      try {
+        const url = `${AGENT_CREDENTIALS_URL}?subType=${encodeURIComponent(
+          selectedEnterprise
+        )}&orgKey=${encodeURIComponent(AGENT_ORG_KEY)}`;
+        const response = await fetch(url, {
+          headers: { accept: "application/json" },
+          signal: controller.signal,
+        });
+        const data = await response.json();
+        console.log("Agent credentials response:", {
+          ok: response.ok,
+          status: response.status,
+          data,
+        });
+
+        if (response.ok && Array.isArray(data?.schema)) {
+          setCredentialSchema(data.schema);
+          const initialValues: Record<string, string> = {};
+          data.schema.forEach((field: CredentialField) => {
+            initialValues[field.field] = field.value ?? "";
+          });
+          setCredentialValues(initialValues);
+        } else {
+          setCredentialsError(
+            data?.message || "Unable to load credential schema."
+          );
+        }
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+        setCredentialsError("Unable to load credential schema.");
+      } finally {
+        setCredentialsLoading(false);
+      }
+    };
+
+    loadActions();
+    loadCredentials();
+
+    return () => controller.abort();
+  }, [isModalOpen, step, selectedEnterprise]);
+
   const openCreateAgent = () => {
     setIsModalOpen(true);
     setStep(1);
@@ -168,6 +297,12 @@ export default function CreateNewAgent() {
     setEnterpriseOptions([]);
     setAgentTypesError("");
     setEnterpriseError("");
+    setAvailableActions([]);
+    setSelectedActions([]);
+    setActionsError("");
+    setCredentialSchema([]);
+    setCredentialValues({});
+    setCredentialsError("");
   };
 
   const closeModal = () => {
@@ -234,7 +369,7 @@ export default function CreateNewAgent() {
 
       {isModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4 py-8">
-          <div className="w-full max-w-3xl overflow-hidden rounded-3xl bg-white shadow-[0_20px_60px_-30px_rgba(15,23,42,0.6)]">
+          <div className="flex w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-[0_20px_60px_-30px_rgba(15,23,42,0.6)] max-h-[90vh]">
             <div className="flex items-center justify-between bg-[#4f49e2] px-6 py-4 text-white">
               <h3 className="text-lg font-semibold">Create agent</h3>
               <button
@@ -246,8 +381,10 @@ export default function CreateNewAgent() {
               </button>
             </div>
 
-            {step === 1 ? (
-              <div className="px-8 py-7">
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div className="flex-1 overflow-y-auto px-8 py-7">
+                {step === 1 ? (
+                  <div>
                 <div className="space-y-2">
                   <h4 className="text-xl font-semibold text-[#101828]">
                     Connect your new intelligence
@@ -288,30 +425,9 @@ export default function CreateNewAgent() {
                   </div>
                 </div>
 
-                <div className="mt-6 flex items-center justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={closeModal}
-                    className="rounded-xl border border-[#e5e7eb] px-6 py-2.5 text-sm font-semibold text-[#374151]"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleValidateAgentName}
-                    disabled={isNextDisabled}
-                    className={`rounded-xl px-6 py-2.5 text-sm font-semibold text-white transition ${
-                      isNextDisabled
-                        ? "cursor-not-allowed bg-[#a7a6f2]"
-                        : "bg-[#4f49e2] shadow-[0_10px_24px_-18px_rgba(79,73,226,0.9)] hover:bg-[#433ccf]"
-                    }`}
-                  >
-                    {isValidating ? "Validating..." : "Next"}
-                  </button>
-                </div>
               </div>
-            ) : (
-              <div className="px-8 py-7">
+            ) : step === 2 ? (
+              <div>
                 <div className="space-y-2">
                   <h4 className="text-xl font-semibold text-[#101828]">
                     Connect your new intelligence
@@ -404,28 +520,254 @@ export default function CreateNewAgent() {
                   </div>
                 </div>
 
-                <div className="mt-6 flex items-center justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setStep(1)}
-                    className="rounded-xl border border-[#e5e7eb] px-6 py-2.5 text-sm font-semibold text-[#374151]"
-                  >
-                    Prev
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isStepTwoNextDisabled}
-                    className={`rounded-xl px-6 py-2.5 text-sm font-semibold text-white ${
-                      isStepTwoNextDisabled
-                        ? "cursor-not-allowed bg-[#a7a6f2]"
-                        : "bg-[#4f49e2] shadow-[0_10px_24px_-18px_rgba(79,73,226,0.9)] hover:bg-[#433ccf]"
-                    }`}
-                  >
-                    Next
-                  </button>
+              </div>
+            ) : (
+              <div>
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold tracking-[0.3em] text-[#64748b]">
+                    Create Agent
+                  </p>
+                  <h4 className="text-2xl font-semibold text-[#0f172a]">
+                    Connect your new intelligence
+                  </h4>
+                  <p className="text-sm text-[#6b7280]">Step 3 of 3</p>
                 </div>
+
+                <div className="mt-6 rounded-2xl border border-[#e6ecf5] bg-[#f8fafc] p-6 shadow-[0_12px_35px_-30px_rgba(15,23,42,0.5)]">
+                  <h5 className="text-lg font-semibold text-[#111827]">
+                    Authorize the integrations
+                  </h5>
+                  <p className="mt-2 text-sm text-[#64748b]">
+                    Provide credentials and optional server information.
+                  </p>
+
+                  <div className="mt-6 rounded-2xl border border-[#e5e7eb] bg-white p-5">
+                    <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[#94a3b8]">
+                      Available actions
+                    </div>
+
+                    <div className="mt-4 grid gap-4 md:grid-cols-[1fr_auto_1fr]">
+                      <select
+                        multiple
+                        size={6}
+                        value={availableSelection}
+                        onChange={(event) => {
+                          const values = Array.from(
+                            event.target.selectedOptions
+                          ).map((option) => option.value);
+                          setAvailableSelection(values);
+                        }}
+                        className="h-44 w-full rounded-xl border border-[#e5e7eb] bg-white px-3 py-2 text-sm text-[#111827] outline-none focus:border-[#4f49e2] focus:ring-2 focus:ring-[#4f49e2]/20"
+                      >
+                        {actionsLoading ? (
+                          <option disabled>Loading actions...</option>
+                        ) : null}
+                        {!actionsLoading && availableActions.length === 0 ? (
+                          <option disabled>
+                            {actionsError
+                              ? actionsError
+                              : "No actions available."}
+                          </option>
+                        ) : null}
+                        {availableActions.map((action) => (
+                          <option
+                            key={action.action_code}
+                            value={action.action_code}
+                          >
+                            {action.action_name}
+                          </option>
+                        ))}
+                      </select>
+
+                      <div className="flex flex-col items-center justify-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (availableSelection.length === 0) {
+                              return;
+                            }
+                            const moving = new Set(availableSelection);
+                            const moved = availableActions.filter((action) =>
+                              moving.has(action.action_code)
+                            );
+                            const remaining = availableActions.filter(
+                              (action) => !moving.has(action.action_code)
+                            );
+                            setAvailableActions(remaining);
+                            setSelectedActions([
+                              ...selectedActions,
+                              ...moved,
+                            ]);
+                            setAvailableSelection([]);
+                          }}
+                          className="rounded-full border border-[#e5e7eb] bg-white px-3 py-2 text-xs font-semibold text-[#64748b] shadow-sm hover:border-[#c7d2fe]"
+                        >
+                          &gt;&gt;
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (selectedSelection.length === 0) {
+                              return;
+                            }
+                            const moving = new Set(selectedSelection);
+                            const moved = selectedActions.filter((action) =>
+                              moving.has(action.action_code)
+                            );
+                            const remaining = selectedActions.filter(
+                              (action) => !moving.has(action.action_code)
+                            );
+                            setSelectedActions(remaining);
+                            setAvailableActions([
+                              ...availableActions,
+                              ...moved,
+                            ]);
+                            setSelectedSelection([]);
+                          }}
+                          className="rounded-full border border-[#e5e7eb] bg-white px-3 py-2 text-xs font-semibold text-[#64748b] shadow-sm hover:border-[#c7d2fe]"
+                        >
+                          &lt;&lt;
+                        </button>
+                      </div>
+
+                      <select
+                        multiple
+                        size={6}
+                        value={selectedSelection}
+                        onChange={(event) => {
+                          const values = Array.from(
+                            event.target.selectedOptions
+                          ).map((option) => option.value);
+                          setSelectedSelection(values);
+                        }}
+                        className="h-44 w-full rounded-xl border border-[#e5e7eb] bg-white px-3 py-2 text-sm text-[#111827] outline-none focus:border-[#4f49e2] focus:ring-2 focus:ring-[#4f49e2]/20"
+                      >
+                        {selectedActions.length === 0 ? (
+                          <option disabled>Selected values</option>
+                        ) : null}
+                        {selectedActions.map((action) => (
+                          <option
+                            key={action.action_code}
+                            value={action.action_code}
+                          >
+                            {action.action_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="mt-6">
+                    <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.2em] text-[#94a3b8]">
+                      <span>Credentials</span>
+                      <span className="normal-case text-[#94a3b8]">
+                        Populated from backend schema
+                      </span>
+                    </div>
+
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                      {credentialsLoading ? (
+                        <div className="col-span-full text-sm text-[#64748b]">
+                          Loading credentials...
+                        </div>
+                      ) : null}
+                      {credentialsError ? (
+                        <div className="col-span-full text-sm text-[#dc2626]">
+                          {credentialsError}
+                        </div>
+                      ) : null}
+                      {credentialSchema.map((field) => (
+                        <label
+                          key={field.field}
+                          className="flex flex-col gap-2 text-sm font-semibold text-[#64748b]"
+                        >
+                          <span>{field.label}</span>
+                          <input
+                            type={field.type === "password" ? "password" : "text"}
+                            value={credentialValues[field.field] ?? ""}
+                            onChange={(event) =>
+                              setCredentialValues((prev) => ({
+                                ...prev,
+                                [field.field]: event.target.value,
+                              }))
+                            }
+                            placeholder={field.label}
+                            className="w-full rounded-xl border border-[#e5e7eb] bg-white px-4 py-3 text-sm text-[#111827] outline-none transition focus:border-[#4f49e2] focus:ring-2 focus:ring-[#4f49e2]/20"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
               </div>
             )}
+              </div>
+
+              <div className="flex items-center justify-between border-t border-[#eef1f7] px-8 py-5">
+                {step === 1 ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={closeModal}
+                      className="rounded-xl border border-[#e5e7eb] px-6 py-2.5 text-sm font-semibold text-[#374151]"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleValidateAgentName}
+                      disabled={isNextDisabled}
+                      className={`rounded-xl px-6 py-2.5 text-sm font-semibold text-white transition ${
+                        isNextDisabled
+                          ? "cursor-not-allowed bg-[#a7a6f2]"
+                          : "bg-[#4f49e2] shadow-[0_10px_24px_-18px_rgba(79,73,226,0.9)] hover:bg-[#433ccf]"
+                      }`}
+                    >
+                      {isValidating ? "Validating..." : "Next"}
+                    </button>
+                  </>
+                ) : step === 2 ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setStep(1)}
+                      className="rounded-xl border border-[#e5e7eb] px-6 py-2.5 text-sm font-semibold text-[#374151]"
+                    >
+                      Prev
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isStepTwoNextDisabled}
+                      onClick={() => setStep(3)}
+                      className={`rounded-xl px-6 py-2.5 text-sm font-semibold text-white ${
+                        isStepTwoNextDisabled
+                          ? "cursor-not-allowed bg-[#a7a6f2]"
+                          : "bg-[#4f49e2] shadow-[0_10px_24px_-18px_rgba(79,73,226,0.9)] hover:bg-[#433ccf]"
+                      }`}
+                    >
+                      Next
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setStep(2)}
+                      className="rounded-xl border border-[#e5e7eb] px-6 py-2.5 text-sm font-semibold text-[#374151]"
+                    >
+                      Prev
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-xl bg-[#4f49e2] px-6 py-2.5 text-sm font-semibold text-white shadow-[0_10px_24px_-18px_rgba(79,73,226,0.9)] hover:bg-[#433ccf]"
+                    >
+                      Submit
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       ) : null}
