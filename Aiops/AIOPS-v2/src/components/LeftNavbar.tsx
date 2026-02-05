@@ -133,7 +133,7 @@ export default function LeftNavbar() {
   const pathname = usePathname();
 
   return (
-    <aside className="group fixed left-0 top-0 z-40 flex h-screen w-[84px] shrink-0 flex-col border-r border-[#eaedf6] bg-white px-4 py-6 transition-all duration-300 hover:w-[300px]">
+    <aside className="peer group fixed left-0 top-0 z-40 flex h-screen w-[84px] shrink-0 flex-col border-r border-[#eaedf6] bg-white px-4 py-6 transition-all duration-300 hover:w-[300px]">
       <div className="flex items-center gap-3">
         <div className="flex w-11 items-center justify-center transition-all duration-300 group-hover:w-0 group-hover:opacity-0 group-hover:overflow-hidden">
           <img
