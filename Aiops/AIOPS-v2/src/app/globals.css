@@ -75,3 +75,18 @@ body {
   transform-origin: center;
   animation: toastDot 3s linear forwards;
 }
+
+@keyframes logReveal {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+.log-typing {
+  display: inline-block;
+  clip-path: inset(0 100% 0 0);
+  animation: logReveal 1.6s steps(40, end) forwards;
+}

@@ -188,6 +188,7 @@ export default function AgentManagementSection() {
           };
         })
       );
+      window.dispatchEvent(new CustomEvent("agents:statusChanged"));
       setPendingAction(null);
     } catch (error) {
       setUpdateError(`Unable to ${action} ${agent.name}.`);

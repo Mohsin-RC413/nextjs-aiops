@@ -48,9 +48,6 @@ export default function DashboardOverview() {
   const [isIncidentLoading, setIsIncidentLoading] = useState(false);
 
   const loadIncidentCount = useCallback(async (signal?: AbortSignal) => {
-    setIncidentCount("--");
-    setIsIncidentLoading(false);
-
     try {
       const listResponse = await fetch(
         `${AGENT_LIST_URL}?orgKey=${encodeURIComponent(AGENT_ORG_KEY)}`,
@@ -62,6 +59,8 @@ export default function DashboardOverview() {
       const listData = await listResponse.json();
 
       if (!listResponse.ok || !Array.isArray(listData?.agents)) {
+        setIncidentCount("--");
+        setIsIncidentLoading(false);
         return;
       }
 
@@ -73,6 +72,8 @@ export default function DashboardOverview() {
       );
 
       if (!serviceNowAgent) {
+        setIncidentCount("--");
+        setIsIncidentLoading(false);
         return;
       }
 
@@ -97,6 +98,8 @@ export default function DashboardOverview() {
 
       if (countResponse.ok && typeof countData?.count === "number") {
         setIncidentCount(String(countData.count));
+      } else {
+        setIncidentCount("--");
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
@@ -128,6 +131,16 @@ export default function DashboardOverview() {
     return () => {
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [loadIncidentCount]);
+
+  useEffect(() => {
+    const handleAgentStatusChanged = () => {
+      loadIncidentCount();
+    };
+    window.addEventListener("agents:statusChanged", handleAgentStatusChanged);
+    return () => {
+      window.removeEventListener("agents:statusChanged", handleAgentStatusChanged);
     };
   }, [loadIncidentCount]);
 
