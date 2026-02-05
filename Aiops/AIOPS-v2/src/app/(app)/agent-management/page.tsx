@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import AgentRegistry from "./AgentRegistry";
 import AgentStats from "./AgentStats";
@@ -27,54 +27,100 @@ export default function AgentManagementPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const agentsRef = useRef<AgentRecord[]>([]);
+  const requestIdRef = useRef(0);
 
-  const loadAgents = async (signal?: AbortSignal) => {
-    setIsLoading(true);
-    setLoadError("");
+  useEffect(() => {
+    agentsRef.current = agents;
+  }, [agents]);
 
-    try {
-      const url = `${AGENT_LIST_URL}?orgKey=${encodeURIComponent(
-        AGENT_ORG_KEY
-      )}`;
-      const response = await fetch(url, {
-        headers: { accept: "application/json" },
-        signal,
-      });
-      const data = await response.json();
-      console.log("Agent list response:", {
-        ok: response.ok,
-        status: response.status,
-        data,
-      });
+  const loadAgents = useCallback(
+    async (options?: { signal?: AbortSignal; refresh?: boolean }) => {
+      const requestId = ++requestIdRef.current;
+      const hasData = agentsRef.current.length > 0;
+      const shouldRefresh = Boolean(options?.refresh && hasData);
 
-      if (response.ok && Array.isArray(data?.agents)) {
-        setAgents(data.agents);
+      if (shouldRefresh) {
+        setIsRefreshing(true);
       } else {
-        setLoadError(data?.message || "Unable to load agents.");
+        setIsLoading(true);
+        setLoadError("");
       }
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        return;
+
+      try {
+        const url = `${AGENT_LIST_URL}?orgKey=${encodeURIComponent(
+          AGENT_ORG_KEY
+        )}`;
+        const response = await fetch(url, {
+          headers: { accept: "application/json" },
+          signal: options?.signal,
+        });
+        const data = await response.json();
+        console.log("Agent list response:", {
+          ok: response.ok,
+          status: response.status,
+          data,
+        });
+
+        if (requestId !== requestIdRef.current) {
+          return;
+        }
+
+        if (response.ok && Array.isArray(data?.agents)) {
+          setAgents(data.agents);
+          setLoadError("");
+        } else if (!shouldRefresh) {
+          setLoadError(data?.message || "Unable to load agents.");
+        }
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+        if (!shouldRefresh) {
+          setLoadError("Unable to load agents.");
+        }
+      } finally {
+        if (requestId !== requestIdRef.current) {
+          return;
+        }
+        if (shouldRefresh) {
+          setIsRefreshing(false);
+        } else {
+          setIsLoading(false);
+        }
       }
-      setLoadError("Unable to load agents.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    },
+    []
+  );
 
   useEffect(() => {
     const controller = new AbortController();
-    loadAgents(controller.signal);
+    loadAgents({ signal: controller.signal });
     return () => controller.abort();
-  }, []);
+  }, [loadAgents]);
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        loadAgents({ refresh: true });
+      }
+    };
+
+    const handleFocus = () => loadAgents({ refresh: true });
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [loadAgents]);
 
   const handleRefresh = async () => {
     if (isRefreshing) {
       return;
     }
-    setIsRefreshing(true);
-    await loadAgents();
-    setIsRefreshing(false);
+    await loadAgents({ refresh: true });
   };
 
   const { onlineCount, offlineCount, totalCount } = useMemo(() => {
@@ -99,7 +145,7 @@ export default function AgentManagementPage() {
                 Lifecycle, versioning, and health of deployed agents.
               </p>
             </div>
-            <CreateNewAgent onCreateSuccess={() => loadAgents()} />
+            <CreateNewAgent onCreateSuccess={() => loadAgents({ refresh: true })} />
           </div>
 
           <div className="flex flex-1 flex-col gap-4">
@@ -130,7 +176,7 @@ export default function AgentManagementPage() {
         agents={agents}
         isLoading={isLoading}
         loadError={loadError}
-        onDeleteSuccess={() => loadAgents()}
+        onDeleteSuccess={() => loadAgents({ refresh: true })}
       />
     </div>
   );
