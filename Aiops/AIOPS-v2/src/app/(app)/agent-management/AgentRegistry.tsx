@@ -1,7 +1,7 @@
 "use client";
 
 import { Bot, Edit3, Search, Trash2, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AGENT_API_BASE_URL } from "@/config/agent";
 
 type AgentRecord = {
@@ -32,6 +32,7 @@ export default function AgentRegistry({
   const [deleteTarget, setDeleteTarget] = useState<AgentRecord | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const deleteBaseUrl = AGENT_API_BASE_URL.endsWith("/")
     ? AGENT_API_BASE_URL.slice(0, -1)
@@ -53,6 +54,17 @@ export default function AgentRegistry({
       agent.name?.toLowerCase().includes(normalizedSearch)
     );
   }, [agents, filter, searchValue]);
+
+  const pageSize = 6;
+  const totalPages = Math.max(1, Math.ceil(filteredAgents.length / pageSize));
+  const pagedAgents = filteredAgents.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter, searchValue, agents.length]);
 
   const agentCount = agents.length;
 
@@ -226,7 +238,7 @@ export default function AgentRegistry({
               <span>Action</span>
             </div>
             <div className="divide-y divide-[#eef1f7] bg-white">
-              {filteredAgents.map((agent, index) => {
+              {pagedAgents.map((agent, index) => {
                 const isOnline = agent.status?.toUpperCase() === "STARTED";
                 const runningAt = agent.port
                   ? agent.port.toString()
@@ -290,6 +302,39 @@ export default function AgentRegistry({
               );
             })}
             </div>
+            {totalPages > 1 ? (
+              <div className="flex items-center justify-between border-t border-[#eef1f7] bg-white px-4 py-3 text-sm text-[#6b7280]">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${
+                    currentPage === 1
+                      ? "cursor-not-allowed border-[#e5e7eb] text-[#9ca3af]"
+                      : "border-[#e0e5f0] text-[#111827] hover:bg-[#eef2ff]"
+                  }`}
+                >
+                  Prev
+                </button>
+                <span className="text-xs font-semibold text-[#6b7280]">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+                  }
+                  disabled={currentPage === totalPages}
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${
+                    currentPage === totalPages
+                      ? "cursor-not-allowed border-[#e5e7eb] text-[#9ca3af]"
+                      : "border-[#e0e5f0] text-[#111827] hover:bg-[#eef2ff]"
+                  }`}
+                >
+                  Next
+                </button>
+              </div>
+            ) : null}
           </>
         )}
       </div>
