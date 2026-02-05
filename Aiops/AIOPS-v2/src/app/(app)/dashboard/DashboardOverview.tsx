@@ -2,7 +2,6 @@
 
 import { AGENT_API_BASE_URL, AGENT_ORG_KEY } from "@/config/agent";
 import {
-  Bot,
   CheckCircle2,
   Loader2,
   RefreshCw,
@@ -41,12 +40,6 @@ const baseStatCards = [
     value: "58",
     icon: Zap,
     bg: "from-[#2f80ff] to-[#1aa7ff]",
-  },
-  {
-    title: "Total Agents",
-    value: "20",
-    icon: Bot,
-    bg: "from-[#b45cff] to-[#ff5ac8]",
   },
 ];
 
@@ -313,7 +306,34 @@ export default function DashboardOverview() {
   );
 
   return (
-    <section className="rounded-3xl bg-white px-8 py-7 shadow-[0_18px_50px_-38px_rgba(16,24,40,0.5)]">
+    <section className="relative rounded-3xl bg-white px-8 py-7 shadow-[0_18px_50px_-38px_rgba(16,24,40,0.5)]">
+      <button
+        type="button"
+        onClick={() => {
+          const cached = serviceNowAgentRef.current;
+          if (cached) {
+            loadIncidentDetailsForAgent(cached.agentId, cached.port, undefined, {
+              force: true,
+            });
+            return;
+          }
+          loadIncidentCount(undefined, { force: true });
+        }}
+        disabled={isIncidentLoading || isDetailsLoading}
+        className={`absolute right-8 top-7 inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#e3e7f2] bg-white text-[#6b7280] shadow-[0_8px_16px_-14px_rgba(16,24,40,0.4)] transition ${
+          isIncidentLoading || isDetailsLoading
+            ? "cursor-not-allowed opacity-60"
+            : "hover:text-[#4f49e2]"
+        }`}
+        aria-label="Refresh incidents"
+        title="Refresh incidents"
+      >
+        <RefreshCw
+          className={`h-4 w-4 ${
+            isIncidentLoading || isDetailsLoading ? "animate-spin" : ""
+          }`}
+        />
+      </button>
       <div className="grid gap-6 lg:grid-cols-[1.05fr_2fr]">
         <div className="space-y-6">
           <div>
@@ -337,71 +357,14 @@ export default function DashboardOverview() {
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid justify-end gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {statCards.map((card) => {
             const Icon = card.icon;
             return (
               <div
                 key={card.title}
-                className="relative rounded-2xl bg-white p-5 shadow-[0_12px_30px_-28px_rgba(16,24,40,0.45)] ring-1 ring-[#eef1f7]"
+                className="rounded-2xl bg-white p-5 shadow-[0_12px_30px_-28px_rgba(16,24,40,0.45)] ring-1 ring-[#eef1f7]"
               >
-                {card.title === "Total Incidents" ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const cached = serviceNowAgentRef.current;
-                      if (cached) {
-                        loadIncidentDetailsForAgent(cached.agentId, cached.port, undefined, {
-                          force: true,
-                        });
-                        return;
-                      }
-                      loadIncidentCount(undefined, { force: true });
-                    }}
-                    disabled={isIncidentLoading}
-                    className={`absolute right-4 top-4 inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#e3e7f2] bg-white text-[#6b7280] shadow-[0_8px_16px_-14px_rgba(16,24,40,0.4)] transition ${
-                      isIncidentLoading
-                        ? "cursor-not-allowed opacity-60"
-                        : "hover:text-[#4f49e2]"
-                    }`}
-                    aria-label="Refresh total incidents"
-                    title="Refresh total incidents"
-                  >
-                    <RefreshCw
-                      className={`h-3.5 w-3.5 ${
-                        isIncidentLoading ? "animate-spin" : ""
-                      }`}
-                    />
-                  </button>
-                ) : card.title === "Open Incidents" ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const cached = serviceNowAgentRef.current;
-                      if (cached) {
-                        loadIncidentDetailsForAgent(cached.agentId, cached.port, undefined, {
-                          force: true,
-                        });
-                        return;
-                      }
-                      loadIncidentCount(undefined, { force: true });
-                    }}
-                    disabled={isDetailsLoading}
-                    className={`absolute right-4 top-4 inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#e3e7f2] bg-white text-[#6b7280] shadow-[0_8px_16px_-14px_rgba(16,24,40,0.4)] transition ${
-                      isDetailsLoading
-                        ? "cursor-not-allowed opacity-60"
-                        : "hover:text-[#4f49e2]"
-                    }`}
-                    aria-label="Refresh open incidents"
-                    title="Refresh open incidents"
-                  >
-                    <RefreshCw
-                      className={`h-3.5 w-3.5 ${
-                        isDetailsLoading ? "animate-spin" : ""
-                      }`}
-                    />
-                  </button>
-                ) : null}
                 <div
                   className={`flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br ${card.bg} text-white shadow-[0_10px_20px_-12px_rgba(0,0,0,0.45)]`}
                 >
