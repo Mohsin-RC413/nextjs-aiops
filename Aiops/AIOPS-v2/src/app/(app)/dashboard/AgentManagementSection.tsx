@@ -169,26 +169,36 @@ export default function AgentManagementSection() {
         return;
       }
 
+      const updatedAgent = {
+        ...agent,
+        status: action === "start" ? "STARTED" : "STOPPED",
+        port:
+          action === "start"
+            ? typeof data?.port === "number"
+              ? data.port
+              : agent.port
+            : null,
+      };
+
       setAgents((prev) =>
         prev.map((item) => {
           if (item.agentId !== agent.agentId) {
             return item;
           }
-          if (action === "start") {
-            return {
-              ...item,
-              status: "STARTED",
-              port: typeof data?.port === "number" ? data.port : item.port,
-            };
-          }
-          return {
-            ...item,
-            status: "STOPPED",
-            port: null,
-          };
+          return updatedAgent;
         })
       );
-      window.dispatchEvent(new CustomEvent("agents:statusChanged"));
+      window.dispatchEvent(
+        new CustomEvent("agents:statusChanged", {
+          detail: {
+            agentId: updatedAgent.agentId,
+            enterprise: updatedAgent.enterprise,
+            status: updatedAgent.status,
+            port: updatedAgent.port,
+            action,
+          },
+        })
+      );
       setPendingAction(null);
     } catch (error) {
       setUpdateError(`Unable to ${action} ${agent.name}.`);
