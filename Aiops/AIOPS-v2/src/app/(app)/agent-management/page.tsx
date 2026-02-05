@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { RefreshCw } from "lucide-react";
 import AgentRegistry from "./AgentRegistry";
 import AgentStats from "./AgentStats";
 import CreateNewAgent from "./createnewagent";
@@ -25,6 +26,7 @@ export default function AgentManagementPage() {
   const [agents, setAgents] = useState<AgentRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const loadAgents = async (signal?: AbortSignal) => {
     setIsLoading(true);
@@ -66,6 +68,15 @@ export default function AgentManagementPage() {
     return () => controller.abort();
   }, []);
 
+  const handleRefresh = async () => {
+    if (isRefreshing) {
+      return;
+    }
+    setIsRefreshing(true);
+    await loadAgents();
+    setIsRefreshing(false);
+  };
+
   const { onlineCount, offlineCount, totalCount } = useMemo(() => {
     const total = agents.length;
     const online = agents.filter(
@@ -91,11 +102,27 @@ export default function AgentManagementPage() {
             <CreateNewAgent onCreateSuccess={() => loadAgents()} />
           </div>
 
-          <AgentStats
-            onlineCount={onlineCount}
-            offlineCount={offlineCount}
-            totalCount={totalCount}
-          />
+          <div className="flex flex-1 flex-col gap-4">
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="inline-flex items-center gap-2 rounded-xl border border-[#e3e7f2] bg-white px-4 py-2 text-sm font-semibold text-[#4f49e2] shadow-[0_10px_20px_-16px_rgba(79,73,226,0.5)] transition hover:bg-[#eef2ff] disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
+                />
+                Refresh Agents
+              </button>
+            </div>
+            <AgentStats
+              onlineCount={onlineCount}
+              offlineCount={offlineCount}
+              totalCount={totalCount}
+              isLoading={isLoading || isRefreshing}
+            />
+          </div>
         </div>
       </section>
 

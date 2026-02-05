@@ -1,17 +1,19 @@
 "use client";
 
-import { Bot, CheckCircle2, Zap } from "lucide-react";
+import { Bot, CheckCircle2, Loader2, Zap } from "lucide-react";
 
 type AgentStatsProps = {
   onlineCount: number;
   offlineCount: number;
   totalCount: number;
+  isLoading?: boolean;
 };
 
 export default function AgentStats({
   onlineCount,
   offlineCount,
   totalCount,
+  isLoading = false,
 }: AgentStatsProps) {
   const statCards = [
     {
@@ -62,8 +64,12 @@ export default function AgentStats({
             <p className="mt-5 text-sm font-semibold text-[#5a6476]">
               {card.title}
             </p>
-            <p className="mt-2 text-3xl font-semibold text-[#0f1115]">
-              {card.value}
+            <p className="mt-2 flex items-center gap-2 text-3xl font-semibold text-[#0f1115]">
+              {isLoading ? (
+                <Loader2 className="h-6 w-6 animate-spin text-[#5b4cf0]" />
+              ) : (
+                card.value
+              )}
             </p>
           </div>
         );
