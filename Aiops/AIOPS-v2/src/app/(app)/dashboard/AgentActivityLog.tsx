@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Sparkles } from "lucide-react";
+import { Bell, Bot, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { AGENT_API_BASE_URL, AGENT_ORG_KEY } from "@/config/agent";
@@ -416,7 +416,10 @@ export default function AgentActivityLog() {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-sm font-semibold text-[#111827]">
-                    {entry.title}
+                    <span className="inline-flex items-center gap-2">
+                      <Bot className="h-6 w-8 text-[#5b4cf0]" />
+                    
+                    </span>
                   </p>
                   <p className="mt-1 text-sm text-[#5f677a]">
                     {entry.displayedDetail || entry.detail}

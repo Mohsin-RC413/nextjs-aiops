@@ -49,9 +49,10 @@ export default function DashboardOverview() {
   const [openCount, setOpenCount] = useState<string>("--");
   const [closedCount, setClosedCount] = useState<string>("--");
   const [isDetailsLoading, setIsDetailsLoading] = useState(false);
-  const serviceNowAgentRef = useRef<{ agentId: number; port: number } | null>(
-    null
-  );
+  const serviceNowAgentRef = useRef<{
+    agentId: number;
+    port: number | null;
+  } | null>(null);
   const statsInFlightRef = useRef(false);
   const statsRequestIdRef = useRef(0);
   const lastStatsAtRef = useRef(0);
@@ -184,8 +185,16 @@ export default function DashboardOverview() {
 
       serviceNowAgentRef.current = {
         agentId: serviceNowAgent.agentId,
-        port: serviceNowAgent.port,
+        port: serviceNowAgent.port ?? null,
       };
+
+      if (typeof serviceNowAgent.port !== "number") {
+        setIncidentCount("--");
+        setOpenCount("--");
+        setClosedCount("--");
+        setIsDetailsLoading(false);
+        return;
+      }
 
       await loadIncidentDetailsForAgent(
         serviceNowAgent.agentId,
@@ -311,7 +320,7 @@ export default function DashboardOverview() {
         type="button"
         onClick={() => {
           const cached = serviceNowAgentRef.current;
-          if (cached) {
+          if (cached && typeof cached.port === "number") {
             loadIncidentDetailsForAgent(cached.agentId, cached.port, undefined, {
               force: true,
             });

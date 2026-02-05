@@ -31,6 +31,18 @@ type AgentRegistryProps = {
   onDeleteSuccess?: () => void | Promise<void>;
 };
 
+type RulesetItem = {
+  agent_id: string;
+  target_type: string;
+  target_value: string;
+  target_name: string;
+  conditions: string | string[];
+  raise_ticket: string;
+  notifications: string | string[];
+  frequency: string;
+  ruleset_id: number;
+};
+
 export default function AgentRegistry({
   agents,
   isLoading,
@@ -46,6 +58,12 @@ export default function AgentRegistry({
     "rulesets" | "knowledge" | "security"
   >("rulesets");
   const [rulesetTab, setRulesetTab] = useState<"view" | "add">("view");
+  const [rulesets, setRulesets] = useState<RulesetItem[]>([]);
+  const [rulesetListLoading, setRulesetListLoading] = useState(false);
+  const [rulesetListError, setRulesetListError] = useState("");
+  const [deleteRulesetTarget, setDeleteRulesetTarget] =
+    useState<RulesetItem | null>(null);
+  const [isDeletingRuleset, setIsDeletingRuleset] = useState(false);
   const [platformOptions, setPlatformOptions] = useState<
     { label: string; value: string }[]
   >([]);
@@ -123,6 +141,9 @@ export default function AgentRegistry({
     if (!editTarget) {
       setEditTab("rulesets");
       setRulesetTab("view");
+      setRulesets([]);
+      setRulesetListLoading(false);
+      setRulesetListError("");
       setPlatformOptions([]);
       setApplicationOptions([]);
       setTicketOptions([]);
@@ -145,6 +166,63 @@ export default function AgentRegistry({
       previousAppRef.current = null;
     }
   }, [editTarget]);
+
+  const parseRulesetArray = (value: string | string[]) => {
+    if (Array.isArray(value)) {
+      return value;
+    }
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [value];
+      } catch {
+        return [value];
+      }
+    }
+    return [];
+  };
+
+  useEffect(() => {
+    if (!editTarget || editTab !== "rulesets" || rulesetTab !== "view") {
+      return;
+    }
+    if (!editTarget.port) {
+      setRulesetListError("Agent is not running. Start the agent to view rulesets.");
+      return;
+    }
+
+    const controller = new AbortController();
+    const loadRulesets = async () => {
+      setRulesetListLoading(true);
+      setRulesetListError("");
+      try {
+        const url = `http://192.168.18.20:${editTarget.port}/agent/mule/ruleset/list/${editTarget.agentId}`;
+        const response = await fetch(url, {
+          headers: { accept: "application/json" },
+          signal: controller.signal,
+        });
+        const data = await response.json();
+
+        if (response.ok && Array.isArray(data)) {
+          setRulesets(data as RulesetItem[]);
+        } else {
+          setRulesets([]);
+          setRulesetListError("Unable to load rulesets.");
+        }
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+        setRulesets([]);
+        setRulesetListError("Unable to load rulesets.");
+      } finally {
+        setRulesetListLoading(false);
+      }
+    };
+
+    loadRulesets();
+    return () => controller.abort();
+  }, [editTarget, editTab, rulesetTab]);
 
   useEffect(() => {
     if (!isToastVisible) {
@@ -495,6 +573,77 @@ export default function AgentRegistry({
     }
   };
 
+  const handleConfirmDeleteRuleset = async () => {
+    if (
+      !deleteRulesetTarget ||
+      !editTarget ||
+      !editTarget.port ||
+      isDeletingRuleset
+    ) {
+      return;
+    }
+
+    setIsDeletingRuleset(true);
+    setRulesetError("");
+
+    try {
+      const url = `http://192.168.18.20:${editTarget.port}/agent/mule/ruleset/delete`;
+      const payload = {
+        agent_id: String(editTarget.agentId),
+        ruleset_id: String(deleteRulesetTarget.ruleset_id),
+      };
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      let data: unknown = null;
+      try {
+        data = await response.json();
+      } catch {
+        data = null;
+      }
+
+      console.log("Ruleset delete response:", {
+        ok: response.ok,
+        status: response.status,
+        data,
+        payload,
+      });
+
+      const isSuccess =
+        response.ok &&
+        typeof data === "object" &&
+        data !== null &&
+        "status" in data &&
+        String((data as { status?: string }).status).toUpperCase() ===
+          "SUCCESS";
+
+      if (isSuccess) {
+        setRulesets((prev) =>
+          prev.filter(
+            (item) => item.ruleset_id !== deleteRulesetTarget.ruleset_id
+          )
+        );
+        setToastMessage("Ruleset Deleted Successfully");
+        setIsToastVisible(true);
+        setDeleteRulesetTarget(null);
+        return;
+      }
+
+      setRulesetError("Unable to delete ruleset.");
+    } catch (error) {
+      console.error("Ruleset delete error:", error);
+      setRulesetError("Unable to delete ruleset.");
+    } finally {
+      setIsDeletingRuleset(false);
+    }
+  };
+
   return (
     <section className="rounded-3xl bg-white p-6 shadow-[0_18px_50px_-38px_rgba(16,24,40,0.5)]">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -792,7 +941,9 @@ export default function AgentRegistry({
                   <p className="text-sm font-semibold text-[#111827]">
                     {editTarget.name}
                   </p>
-                  <p className="text-xs text-[#6b7280]">Rulesets: 0</p>
+                  <p className="text-xs text-[#6b7280]">
+                    Rulesets: {rulesets.length}
+                  </p>
                 </div>
               </div>
 
@@ -869,17 +1020,125 @@ export default function AgentRegistry({
                       <div className="mt-5">
                         <div className="flex items-center justify-between text-sm font-semibold text-[#111827]">
                           <span>Saved rulesets</span>
-                          <span className="text-[#6b7280]">0 total</span>
+                          <span className="text-[#6b7280]">
+                            {rulesets.length} total
+                          </span>
                         </div>
-                        <div className="mt-4 rounded-2xl border border-[#eef1f7] bg-white px-4 py-10 text-center text-sm text-[#6b7280]">
-                          <p className="font-semibold text-[#111827]">
-                            No rulesets
-                          </p>
-                          <p className="mt-1">
-                            No rulesets to show yet. Switch to Add Ruleset to
-                            create your first one.
-                          </p>
-                        </div>
+                        {rulesetListLoading ? (
+                          <div className="mt-4 rounded-2xl border border-[#eef1f7] bg-white px-4 py-8 text-center text-sm text-[#6b7280]">
+                            Loading rulesets...
+                          </div>
+                        ) : rulesetListError ? (
+                          <div className="mt-4 rounded-2xl border border-[#fee2e2] bg-[#fff5f5] px-4 py-6 text-sm text-[#b91c1c]">
+                            {rulesetListError}
+                          </div>
+                        ) : rulesets.length === 0 ? (
+                          <div className="mt-4 rounded-2xl border border-[#eef1f7] bg-white px-4 py-10 text-center text-sm text-[#6b7280]">
+                            <p className="font-semibold text-[#111827]">
+                              No rulesets
+                            </p>
+                            <p className="mt-1">
+                              No rulesets to show yet. Switch to Add Ruleset to
+                              create your first one.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="mt-4 space-y-4">
+                            {rulesets.map((ruleset, index) => {
+                              const conditions = parseRulesetArray(
+                                ruleset.conditions
+                              ).join(", ");
+                              const notifications = parseRulesetArray(
+                                ruleset.notifications
+                              ).join(", ");
+                              return (
+                                <div
+                                  key={ruleset.ruleset_id ?? index}
+                                  className="rounded-2xl border border-[#eef1f7] bg-white px-5 py-4 text-sm text-[#2b3341]"
+                                >
+                                  <div className="flex items-start justify-between">
+                                    <div>
+                                      <p className="text-xs text-[#6b7280]">
+                                        Ruleset {index + 1}
+                                      </p>
+                                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                                        <span className="text-base font-semibold text-[#111827]">
+                                          {ruleset.target_name}
+                                        </span>
+                                        <span className="text-sm text-[#6b7280]">
+                                          {ruleset.target_type}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setDeleteRulesetTarget(ruleset)
+                                      }
+                                      className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#ffe4e6] text-[#ef4444]"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </button>
+                                  </div>
+
+                                  <div className="mt-4 grid gap-4 md:grid-cols-3">
+                                    <div className="space-y-1">
+                                      <p className="text-xs font-semibold uppercase text-[#6b7280]">
+                                        Platform
+                                      </p>
+                                      <p className="font-semibold text-[#111827]">
+                                        {ruleset.target_type}
+                                      </p>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <p className="text-xs font-semibold uppercase text-[#6b7280]">
+                                        Application
+                                      </p>
+                                      <p className="font-semibold text-[#111827]">
+                                        {ruleset.target_value}
+                                      </p>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <p className="text-xs font-semibold uppercase text-[#6b7280]">
+                                        Ticketing Running Agent
+                                      </p>
+                                      <p className="font-semibold text-[#111827]">
+                                        {ruleset.raise_ticket}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <div className="mt-4 grid gap-4 md:grid-cols-3">
+                                    <div className="space-y-1">
+                                      <p className="text-xs font-semibold uppercase text-[#6b7280]">
+                                        Frequency
+                                      </p>
+                                      <p className="font-semibold text-[#111827]">
+                                        {ruleset.frequency}
+                                      </p>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <p className="text-xs font-semibold uppercase text-[#6b7280]">
+                                        Conditions
+                                      </p>
+                                      <p className="font-semibold text-[#111827]">
+                                        {conditions || "—"}
+                                      </p>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <p className="text-xs font-semibold uppercase text-[#6b7280]">
+                                        Notifications
+                                      </p>
+                                      <p className="font-semibold text-[#111827]">
+                                        {notifications || "—"}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="mt-5 rounded-2xl border border-[#eef1f7] bg-white px-6 py-6">
@@ -1228,6 +1487,54 @@ export default function AgentRegistry({
                 }`}
               >
                 {isSavingRuleset ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {deleteRulesetTarget ? (
+        <div className="fixed inset-0 z-[75] flex items-center justify-center bg-black/30 px-4 py-8">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_-30px_rgba(15,23,42,0.6)]">
+            <div className="flex items-center justify-between border-b border-[#eef1f7] px-6 py-4">
+              <h4 className="text-lg font-semibold text-[#111827]">
+                Delete Ruleset
+              </h4>
+              <button
+                type="button"
+                onClick={() => setDeleteRulesetTarget(null)}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f3f4f6] text-[#111827]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="px-6 py-5">
+              <p className="text-sm text-[#374151]">
+                Are you sure you want to delete this ruleset?
+              </p>
+              {rulesetError ? (
+                <p className="mt-3 text-sm text-[#dc2626]">{rulesetError}</p>
+              ) : null}
+            </div>
+            <div className="flex items-center justify-end gap-3 border-t border-[#eef1f7] px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setDeleteRulesetTarget(null)}
+                className="rounded-xl border border-[#e5e7eb] px-5 py-2 text-sm font-semibold text-[#374151]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteRuleset}
+                disabled={isDeletingRuleset}
+                className={`rounded-xl px-5 py-2 text-sm font-semibold text-white ${
+                  isDeletingRuleset
+                    ? "cursor-not-allowed bg-[#fca5a5]"
+                    : "bg-[#ef4444] shadow-[0_10px_24px_-18px_rgba(239,68,68,0.8)] hover:bg-[#dc2626]"
+                }`}
+              >
+                {isDeletingRuleset ? "Deleting..." : "Delete"}
               </button>
             </div>
           </div>
