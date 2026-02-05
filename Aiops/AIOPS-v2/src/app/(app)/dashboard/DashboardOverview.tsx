@@ -1,9 +1,25 @@
-import { Bot, CheckCircle2, TriangleAlert, Zap } from "lucide-react";
+"use client";
 
-const statCards = [
+import { AGENT_API_BASE_URL, AGENT_ORG_KEY } from "@/config/agent";
+import { Bot, CheckCircle2, Loader2, TriangleAlert, Zap } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+
+type AgentRecord = {
+  agentId: number;
+  name: string;
+  port: number | null;
+  status: string;
+  enterprise: string;
+};
+
+const AGENT_API_BASE = AGENT_API_BASE_URL.endsWith("/")
+  ? AGENT_API_BASE_URL.slice(0, -1)
+  : AGENT_API_BASE_URL;
+const AGENT_LIST_URL = `${AGENT_API_BASE}/aiops/agent/list`;
+
+const baseStatCards = [
   {
     title: "Total Incidents",
-    value: "88",
     icon: TriangleAlert,
     bg: "from-[#ff7a45] to-[#ff4d4f]",
   },
@@ -28,6 +44,99 @@ const statCards = [
 ];
 
 export default function DashboardOverview() {
+  const [incidentCount, setIncidentCount] = useState<string>("--");
+  const [isIncidentLoading, setIsIncidentLoading] = useState(false);
+
+  const loadIncidentCount = useCallback(async (signal?: AbortSignal) => {
+    setIncidentCount("--");
+    setIsIncidentLoading(false);
+
+    try {
+      const listResponse = await fetch(
+        `${AGENT_LIST_URL}?orgKey=${encodeURIComponent(AGENT_ORG_KEY)}`,
+        {
+          headers: { accept: "application/json" },
+          signal,
+        }
+      );
+      const listData = await listResponse.json();
+
+      if (!listResponse.ok || !Array.isArray(listData?.agents)) {
+        return;
+      }
+
+      const serviceNowAgent = (listData.agents as AgentRecord[]).find(
+        (agent) =>
+          agent.enterprise?.trim().toLowerCase() === "servicenow" &&
+          agent.status?.toUpperCase() === "STARTED" &&
+          agent.port
+      );
+
+      if (!serviceNowAgent) {
+        return;
+      }
+
+      setIsIncidentLoading(true);
+
+      const countUrl = `http://192.168.18.20:${serviceNowAgent.port}/agent/serviceNow/count`;
+      const countResponse = await fetch(countUrl, {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ agent_id: String(serviceNowAgent.agentId) }),
+        signal,
+      });
+      const countData = await countResponse.json();
+      console.log("ServiceNow count response:", {
+        ok: countResponse.ok,
+        status: countResponse.status,
+        data: countData,
+      });
+
+      if (countResponse.ok && typeof countData?.count === "number") {
+        setIncidentCount(String(countData.count));
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return;
+      }
+      setIncidentCount("--");
+    } finally {
+      setIsIncidentLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    loadIncidentCount(controller.signal);
+    return () => controller.abort();
+  }, [loadIncidentCount]);
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        loadIncidentCount();
+      }
+    };
+
+    const handleFocus = () => loadIncidentCount();
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [loadIncidentCount]);
+
+  const statCards = baseStatCards.map((card) =>
+    card.title === "Total Incidents"
+      ? { ...card, value: incidentCount, isLoading: isIncidentLoading }
+      : card
+  );
+
   return (
     <section className="rounded-3xl bg-white px-8 py-7 shadow-[0_18px_50px_-38px_rgba(16,24,40,0.5)]">
       <div className="grid gap-6 lg:grid-cols-[1.05fr_2fr]">
@@ -69,8 +178,12 @@ export default function DashboardOverview() {
                 <p className="mt-6 text-sm font-semibold text-[#5a6476]">
                   {card.title}
                 </p>
-                <p className="mt-2 text-3xl font-semibold text-[#0f1115]">
-                  {card.value}
+                <p className="mt-2 flex items-center gap-2 text-3xl font-semibold text-[#0f1115]">
+                  {"isLoading" in card && card.isLoading ? (
+                    <Loader2 className="h-6 w-6 animate-spin text-[#5b4cf0]" />
+                  ) : (
+                    card.value
+                  )}
                 </p>
               </div>
             );

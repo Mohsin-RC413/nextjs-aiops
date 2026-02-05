@@ -1,8 +1,8 @@
 'use client';
 
+import { AgentActivityLog } from "@/components/AgentActivityLog";
 import { AuthGate } from "@/components/auth/AuthGate";
 import { RequireRole } from "@/components/auth/RequireRole";
-import { AgentActivityLog } from "@/components/AgentActivityLog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
