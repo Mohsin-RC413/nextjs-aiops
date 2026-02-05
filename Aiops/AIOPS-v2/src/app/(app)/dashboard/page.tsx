@@ -1,20 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { AGENT_API_BASE_URL, AGENT_ORG_KEY } from "@/config/agent";
 import {
   Bell,
   Bot,
   CheckCircle2,
+  Eye,
   Filter,
   MessageCircle,
-  Eye,
-  ShieldCheck,
   Sparkles,
   TriangleAlert,
-  Zap,
   X,
+  Zap
 } from "lucide-react";
-import { AGENT_API_BASE_URL, AGENT_ORG_KEY } from "@/config/agent";
+import { useEffect, useMemo, useState } from "react";
 
 const statCards = [
   {
@@ -130,12 +129,27 @@ export default function DashboardPage() {
   } | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateError, setUpdateError] = useState("");
+  const [agentFilter, setAgentFilter] = useState<
+    "all" | "running" | "stopped"
+  >("all");
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   const agentApiBase = AGENT_API_BASE_URL.endsWith("/")
     ? AGENT_API_BASE_URL.slice(0, -1)
     : AGENT_API_BASE_URL;
 
   const totalAgents = agents.length;
+  const filteredAgents = useMemo(() => {
+    if (agentFilter === "all") {
+      return agents;
+    }
+    const isRunning = agentFilter === "running";
+    return agents.filter((agent) =>
+      isRunning
+        ? agent.status?.toUpperCase() === "STARTED"
+        : agent.status?.toUpperCase() !== "STARTED"
+    );
+  }, [agents, agentFilter]);
 
   const loadAgents = async (signal?: AbortSignal) => {
     setIsAgentsLoading(true);
@@ -242,9 +256,9 @@ export default function DashboardPage() {
           <div className="space-y-6">
             <div>
               <h2 className="text-2xl font-semibold text-[#10131a]">
-                Welcome back, Alice!{" "}
+                Welcome back, Alice!
                 <span role="img" aria-label="wave">
-                  ??
+                  
                 </span>
               </h2>
               <p className="mt-2 text-sm text-[#5b6476]">
@@ -306,14 +320,55 @@ export default function DashboardPage() {
                 Start/stop live actions and inspect recent activity.
               </p>
             </div>
-            <button
-              type="button"
-              className="flex items-center gap-2 rounded-xl border border-[#e3e7f2] px-3 py-2 text-sm font-medium text-[#111827] shadow-[0_6px_14px_-12px_rgba(16,24,40,0.3)]"
-            >
-              <Filter className="h-4 w-4" />
-              Filter
-            </button>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsFilterOpen((prev) => !prev)}
+                className="flex items-center gap-2 rounded-xl border border-[#e3e7f2] px-3 py-2 text-sm font-medium text-[#111827] shadow-[0_6px_14px_-12px_rgba(16,24,40,0.3)]"
+              >
+                <Filter className="h-4 w-4" />
+                Filter
+              </button>
+              {isFilterOpen ? (
+                <div className="absolute right-0 z-20 mt-2 w-36 overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-[0_12px_24px_-20px_rgba(15,23,42,0.3)]">
+                  {[
+                    { label: "All", value: "all" },
+                    { label: "Running", value: "running" },
+                    { label: "Stopped", value: "stopped" },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => {
+                        setAgentFilter(option.value as "all" | "running" | "stopped");
+                        setIsFilterOpen(false);
+                      }}
+                      className={`w-full px-4 py-2 text-left text-sm ${
+                        agentFilter === option.value
+                          ? "bg-[#eef2ff] text-[#4f49e2]"
+                          : "text-[#111827] hover:bg-[#f3f4f6]"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           </div>
+
+          {agentFilter !== "all" ? (
+            <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-[#e0e5f0] bg-white px-3 py-1 text-xs font-semibold text-[#4f49e2]">
+              {agentFilter === "running" ? "Running" : "Stopped"}
+              <button
+                type="button"
+                onClick={() => setAgentFilter("all")}
+                className="flex h-4 w-4 items-center justify-center rounded-full bg-[#eef2ff] text-[#4f49e2]"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ) : null}
 
           <div className="mt-6 space-y-4">
             {isAgentsLoading ? (
@@ -327,12 +382,12 @@ export default function DashboardPage() {
               <div className="rounded-2xl border border-[#fee2e2] bg-[#fff5f5] px-5 py-6 text-sm text-[#b91c1c] shadow-[0_10px_30px_-28px_rgba(16,24,40,0.4)]">
                 {agentsError}
               </div>
-            ) : agents.length === 0 ? (
+            ) : filteredAgents.length === 0 ? (
               <div className="rounded-2xl border border-[#eef1f7] bg-white px-5 py-6 text-sm text-[#647087] shadow-[0_10px_30px_-28px_rgba(16,24,40,0.4)]">
                 No agents yet.
               </div>
             ) : (
-              agents.map((agent) => {
+              filteredAgents.map((agent) => {
                 const isRunning = agent.status?.toUpperCase() === "STARTED";
                 const runningAt = agent.port
                   ? agent.port.toString()
@@ -390,7 +445,8 @@ export default function DashboardPage() {
                       </button>
                       <button
                         type="button"
-                        className="flex items-center justify-center gap-2 rounded-xl border border-[#e1e5ef] px-4 py-2 text-sm font-medium text-[#3a4355]"
+                        disabled
+                        className="flex items-center justify-center gap-2 rounded-xl border border-[#e1e5ef] px-4 py-2 text-sm font-medium text-[#3a4355] opacity-60 cursor-not-allowed bg-[#f9fafb]"
                       >
                         View Logs
                         <Eye className="h-4 w-4" />
