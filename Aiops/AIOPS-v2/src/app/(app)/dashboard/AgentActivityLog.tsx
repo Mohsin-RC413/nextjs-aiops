@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Bot, Sparkles } from "lucide-react";
+import { Bell, Bot, RefreshCw, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { AGENT_API_BASE_URL, AGENT_ORG_KEY } from "@/config/agent";
@@ -118,6 +118,52 @@ export default function AgentActivityLog() {
   const typingRef = useRef(false);
   const timeoutRef = useRef<number | null>(null);
   const typingIntervalRef = useRef<number | null>(null);
+
+  const handleRefresh = () => {
+    setEntries([]);
+    queueRef.current = [];
+    typingRef.current = false;
+    if (timeoutRef.current) {
+      window.clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    if (typingIntervalRef.current) {
+      window.clearInterval(typingIntervalRef.current);
+      typingIntervalRef.current = null;
+    }
+    if (socketRef.current) {
+      socketRef.current.close();
+      socketRef.current = null;
+    }
+    setIsConnecting(false);
+    if (activeAgent) {
+      setIsConnecting(true);
+      const socketUrl = `${getSocketBase()}:${activeAgent.port}/ws/agent?agent_id=${activeAgent.agentId}`;
+      const socket = new WebSocket(socketUrl);
+      socketRef.current = socket;
+
+      socket.onopen = () => {
+        setIsConnecting(false);
+      };
+
+      socket.onmessage = (event) => {
+        console.log("WebSocket log:", event.data);
+        const incoming = parseIncomingLog(String(event.data ?? ""));
+        queueRef.current.push(incoming);
+        if (!typingRef.current) {
+          flushQueue();
+        }
+      };
+
+      socket.onerror = () => {
+        setIsConnecting(false);
+      };
+
+      socket.onclose = () => {
+        setIsConnecting(false);
+      };
+    }
+  };
 
   const flushQueue = () => {
     if (timeoutRef.current) {
@@ -336,13 +382,24 @@ export default function AgentActivityLog() {
 
   return (
     <div className="rounded-3xl bg-white p-6 shadow-[0_18px_50px_-38px_rgba(16,24,40,0.5)]">
-      <div>
-        <h3 className="text-lg font-semibold text-[#111827]">
-          Agent Activity Log
-        </h3>
-        <p className="mt-1 text-sm text-[#5b6476]">
-          {isLoadingAgents ? "Checking for Mule agent..." : headerText}
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h3 className="text-lg font-semibold text-[#111827]">
+            Agent Activity Log
+          </h3>
+          <p className="mt-1 text-sm text-[#5b6476]">
+            {isLoadingAgents ? "Checking for Mule agent..." : headerText}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleRefresh}
+          className="mt-1 inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#e3e7f2] bg-white text-[#6b7280] shadow-[0_8px_16px_-14px_rgba(16,24,40,0.4)] transition hover:text-[#4f49e2]"
+          aria-label="Refresh logs"
+          title="Refresh logs"
+        >
+          <RefreshCw className="h-4 w-4" />
+        </button>
       </div>
 
       <div className="mt-6 max-h-[520px] space-y-6 overflow-y-auto pr-2">
