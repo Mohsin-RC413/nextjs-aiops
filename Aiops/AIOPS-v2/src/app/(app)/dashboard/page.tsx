@@ -317,7 +317,10 @@ export default function DashboardPage() {
 
           <div className="mt-6 space-y-4">
             {isAgentsLoading ? (
-              <div className="rounded-2xl border border-[#eef1f7] bg-white px-5 py-6 text-sm text-[#647087] shadow-[0_10px_30px_-28px_rgba(16,24,40,0.4)]">
+              <div className="flex items-center gap-3 rounded-2xl border border-[#eef1f7] bg-white px-5 py-6 text-sm text-[#647087] shadow-[0_10px_30px_-28px_rgba(16,24,40,0.4)]">
+                <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[#ecebff] text-[#5b4cf0]">
+                  <Bot className="h-4 w-4" />
+                </span>
                 Loading agents...
               </div>
             ) : agentsError ? (
