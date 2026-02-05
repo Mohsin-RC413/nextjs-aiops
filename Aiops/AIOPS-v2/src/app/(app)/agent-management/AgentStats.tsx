@@ -1,33 +1,45 @@
+"use client";
+
 import { Bot, CheckCircle2, Zap } from "lucide-react";
 
-const statCards = [
-  {
-    title: "Online",
-    value: "30",
-    note: "All healthy",
-    icon: CheckCircle2,
-    tone: "from-[#18c964] to-[#00b56c]",
-    noteColor: "text-[#16a34a]",
-  },
-  {
-    title: "Offline",
-    value: "58",
-    note: "Review connectivity",
-    icon: Zap,
-    tone: "from-[#2f80ff] to-[#1aa7ff]",
-    noteColor: "text-[#3b82f6]",
-  },
-  {
-    title: "Total Agents",
-    value: "20",
-    note: "+2 new this week",
-    icon: Bot,
-    tone: "from-[#b45cff] to-[#ff5ac8]",
-    noteColor: "text-[#e11d8d]",
-  },
-];
+type AgentStatsProps = {
+  onlineCount: number;
+  offlineCount: number;
+  totalCount: number;
+};
 
-export default function AgentStats() {
+export default function AgentStats({
+  onlineCount,
+  offlineCount,
+  totalCount,
+}: AgentStatsProps) {
+  const statCards = [
+    {
+      title: "Online",
+      value: onlineCount,
+      note: "All healthy",
+      icon: CheckCircle2,
+      tone: "from-[#18c964] to-[#00b56c]",
+      noteColor: "text-[#16a34a]",
+    },
+    {
+      title: "Offline",
+      value: offlineCount,
+      note: "Review connectivity",
+      icon: Zap,
+      tone: "from-[#2f80ff] to-[#1aa7ff]",
+      noteColor: "text-[#3b82f6]",
+    },
+    {
+      title: "Total Agents",
+      value: totalCount,
+      note: "+2 new this week",
+      icon: Bot,
+      tone: "from-[#b45cff] to-[#ff5ac8]",
+      noteColor: "text-[#e11d8d]",
+    },
+  ];
+
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {statCards.map((card) => {
