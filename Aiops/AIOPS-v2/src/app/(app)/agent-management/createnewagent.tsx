@@ -964,8 +964,16 @@ export default function CreateNewAgent({ onCreateSuccess }: CreateNewAgentProps)
 
       {isToastVisible ? (
         <div className="fixed bottom-6 right-6 z-50">
-          <div className="rounded-2xl bg-[#4f49e2] px-6 py-3 text-sm font-semibold text-white shadow-[0_14px_30px_-18px_rgba(79,73,226,0.8)]">
-            {toastMessage}
+          <div className="toast-fade relative rounded-2xl bg-[#4f49e2] px-5 py-3 text-sm font-semibold text-white shadow-[0_14px_30px_-18px_rgba(79,73,226,0.8)]">
+            <div className="flex items-center gap-3">
+              <span className="relative flex h-4 w-4 items-center justify-center rounded-full border-2 border-white/60">
+                <span className="toast-dot-fill absolute inset-0 rounded-full bg-white" />
+              </span>
+              <span>{toastMessage}</span>
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 h-1 overflow-hidden rounded-b-2xl bg-white/25">
+              <span className="toast-progress-bar block h-full w-full bg-white/70" />
+            </div>
           </div>
         </div>
       ) : null}

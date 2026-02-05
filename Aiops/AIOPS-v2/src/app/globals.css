@@ -28,3 +28,50 @@ body {
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+@keyframes toastFade {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  80% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes toastProgress {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes toastDot {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(0);
+  }
+}
+
+.toast-fade {
+  animation: toastFade 3s ease forwards;
+}
+
+.toast-progress-bar {
+  transform-origin: left;
+  animation: toastProgress 3s linear forwards;
+}
+
+.toast-dot-fill {
+  transform-origin: center;
+  animation: toastDot 3s linear forwards;
+}
