@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
 import {
   Bell,
   Bot,
@@ -9,7 +12,9 @@ import {
   Sparkles,
   TriangleAlert,
   Zap,
+  X,
 } from "lucide-react";
+import { AGENT_API_BASE_URL, AGENT_ORG_KEY } from "@/config/agent";
 
 const statCards = [
   {
@@ -38,49 +43,38 @@ const statCards = [
   },
 ];
 
-const agentCards = [
-  {
-    name: "Mule Agent 21126",
-    status: "Running",
-    runningAt: "55213",
-    version: "v1.0.0",
-    active: true,
-  },
-  {
-    name: "ServiceNow 22126",
-    status: "Stopped",
-    runningAt: "55213",
-    version: "v1.0.0",
-    active: false,
-  },
-  {
-    name: "Teams Agent",
-    status: "Stopped",
-    runningAt: "55213",
-    version: "v1.0.0",
-    active: false,
-  },
-];
+type AgentRecord = {
+  agentId: number;
+  name: string;
+  port: number | null;
+  status: string;
+  enterprise: string;
+  start_time: string | null;
+  stop_time: string | null;
+};
 
 const activityLog = [
   {
     title: "AIOps Agent Started",
-    detail: "I’m up and running. Mule login completed successfully.",
+    detail: "I'm up and running. Mule login completed successfully.",
     tag: "success",
   },
   {
     title: "Awaiting Agent Start",
-    detail: "I don’t see any rules assigned to me yet. I’ll stay idle and keep checking periodically.",
+    detail:
+      "I don't see any rules assigned to me yet. I'll stay idle and keep checking periodically.",
     tag: "warning",
   },
   {
     title: "System Health Check",
-    detail: "I’m going to sleep for 15 seconds (about 1 minutes). I’ll check again.",
+    detail:
+      "I'm going to sleep for 15 seconds (about 1 minutes). I'll check again.",
     tag: "warning",
   },
   {
     title: "Update Check",
-    detail: "The application 'warehouse-app05' is running normally (status: RUNNING).",
+    detail:
+      "The application 'warehouse-app05' is running normally (status: RUNNING).",
     tag: "running",
   },
 ];
@@ -127,6 +121,120 @@ const activityTagStyles: Record<string, string> = {
 };
 
 export default function DashboardPage() {
+  const [agents, setAgents] = useState<AgentRecord[]>([]);
+  const [isAgentsLoading, setIsAgentsLoading] = useState(true);
+  const [agentsError, setAgentsError] = useState("");
+  const [pendingAction, setPendingAction] = useState<{
+    agent: AgentRecord;
+    action: "start" | "stop";
+  } | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateError, setUpdateError] = useState("");
+
+  const agentApiBase = AGENT_API_BASE_URL.endsWith("/")
+    ? AGENT_API_BASE_URL.slice(0, -1)
+    : AGENT_API_BASE_URL;
+
+  const totalAgents = agents.length;
+
+  const loadAgents = async (signal?: AbortSignal) => {
+    setIsAgentsLoading(true);
+    setAgentsError("");
+
+    try {
+      const url = `${agentApiBase}/aiops/agent/list?orgKey=${encodeURIComponent(
+        AGENT_ORG_KEY
+      )}`;
+      const response = await fetch(url, {
+        headers: { accept: "application/json" },
+        signal,
+      });
+      const data = await response.json();
+      console.log("Dashboard agent list response:", {
+        ok: response.ok,
+        status: response.status,
+        data,
+      });
+
+      if (response.ok && Array.isArray(data?.agents)) {
+        setAgents(data.agents);
+      } else {
+        setAgentsError(data?.message || "Unable to load agents.");
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return;
+      }
+      setAgentsError("Unable to load agents.");
+    } finally {
+      setIsAgentsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const controller = new AbortController();
+    loadAgents(controller.signal);
+    return () => controller.abort();
+  }, []);
+
+  const handleConfirmToggle = async () => {
+    if (!pendingAction || isUpdating) {
+      return;
+    }
+
+    const { agent, action } = pendingAction;
+    setIsUpdating(true);
+    setUpdateError("");
+
+    try {
+      const url = `${agentApiBase}/aiops/agent/${action}?agentId=${encodeURIComponent(
+        agent.agentId
+      )}`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { accept: "application/json" },
+      });
+      const data = await response.json();
+      console.log(`Agent ${action} response:`, {
+        ok: response.ok,
+        status: response.status,
+        data,
+      });
+
+      if (!response.ok) {
+        setUpdateError(
+          data?.message || `Unable to ${action} ${agent.name}.`
+        );
+        return;
+      }
+
+      setAgents((prev) =>
+        prev.map((item) => {
+          if (item.agentId !== agent.agentId) {
+            return item;
+          }
+          if (action === "start") {
+            return {
+              ...item,
+              status: "STARTED",
+              port: typeof data?.port === "number" ? data.port : item.port,
+            };
+          }
+          return {
+            ...item,
+            status: "STOPPED",
+            port: null,
+          };
+        })
+      );
+      setPendingAction(null);
+    } catch (error) {
+      setUpdateError(`Unable to ${action} ${agent.name}.`);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   return (
     <div className="space-y-8">
       <section className="rounded-3xl bg-white px-8 py-7 shadow-[0_18px_50px_-38px_rgba(16,24,40,0.5)]">
@@ -136,7 +244,7 @@ export default function DashboardPage() {
               <h2 className="text-2xl font-semibold text-[#10131a]">
                 Welcome back, Alice!{" "}
                 <span role="img" aria-label="wave">
-                  👋
+                  ??
                 </span>
               </h2>
               <p className="mt-2 text-sm text-[#5b6476]">
@@ -191,7 +299,7 @@ export default function DashboardPage() {
                   Agent management
                 </h3>
                 <span className="rounded-md border border-[#cbd2ff] px-2 py-0.5 text-xs font-semibold text-[#5b4cf0]">
-                  20
+                  {totalAgents}
                 </span>
               </div>
               <p className="mt-1 text-sm text-[#5b6476]">
@@ -208,59 +316,87 @@ export default function DashboardPage() {
           </div>
 
           <div className="mt-6 space-y-4">
-            {agentCards.map((agent) => (
-              <div
-                key={agent.name}
-                className="rounded-2xl border border-[#eef1f7] bg-white px-5 py-4 shadow-[0_10px_30px_-28px_rgba(16,24,40,0.4)]"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#ecebff] text-[#5b4cf0]">
-                      <Bot className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-[#111827]">
-                        {agent.name}
-                      </p>
-                      <p className="text-xs text-[#647087]">
-                        Running at: {agent.runningAt} – {agent.version}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-[#647087]">
-                    <span>{agent.status}</span>
-                    <span
-                      className={`relative inline-flex h-5 w-10 items-center rounded-full ${
-                        agent.active ? "bg-[#5b4cf0]" : "bg-[#e3e6ee]"
-                      }`}
-                    >
-                      <span
-                        className={`absolute h-4 w-4 rounded-full bg-white shadow ${
-                          agent.active ? "left-5" : "left-1"
-                        }`}
-                      />
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <button
-                    type="button"
-                    className="flex items-center justify-center gap-2 rounded-xl bg-[#cfefff] px-4 py-2 text-sm font-medium text-[#0b7ed9]"
-                  >
-                    <MessageCircle className="h-4 w-4" />
-                    Chat with agent
-                  </button>
-                  <button
-                    type="button"
-                    className="flex items-center justify-center gap-2 rounded-xl border border-[#e1e5ef] px-4 py-2 text-sm font-medium text-[#3a4355]"
-                  >
-                    View Logs
-                    <Eye className="h-4 w-4" />
-                  </button>
-                </div>
+            {isAgentsLoading ? (
+              <div className="rounded-2xl border border-[#eef1f7] bg-white px-5 py-6 text-sm text-[#647087] shadow-[0_10px_30px_-28px_rgba(16,24,40,0.4)]">
+                Loading agents...
               </div>
-            ))}
+            ) : agentsError ? (
+              <div className="rounded-2xl border border-[#fee2e2] bg-[#fff5f5] px-5 py-6 text-sm text-[#b91c1c] shadow-[0_10px_30px_-28px_rgba(16,24,40,0.4)]">
+                {agentsError}
+              </div>
+            ) : agents.length === 0 ? (
+              <div className="rounded-2xl border border-[#eef1f7] bg-white px-5 py-6 text-sm text-[#647087] shadow-[0_10px_30px_-28px_rgba(16,24,40,0.4)]">
+                No agents yet.
+              </div>
+            ) : (
+              agents.map((agent) => {
+                const isRunning = agent.status?.toUpperCase() === "STARTED";
+                const runningAt = agent.port
+                  ? agent.port.toString()
+                  : "Agent Not Started";
+                return (
+                  <div
+                    key={agent.agentId}
+                    className="rounded-2xl border border-[#eef1f7] bg-white px-5 py-4 shadow-[0_10px_30px_-28px_rgba(16,24,40,0.4)]"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#ecebff] text-[#5b4cf0]">
+                          <Bot className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-[#111827]">
+                            {agent.name}
+                          </p>
+                          <p className="text-xs text-[#647087]">
+                            Running at: {runningAt} - v1.0.0
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-[#647087]">
+                        <span>{isRunning ? "Running" : "Stopped"}</span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPendingAction({
+                              agent,
+                              action: isRunning ? "stop" : "start",
+                            })
+                          }
+                          disabled={isUpdating}
+                          className={`relative inline-flex h-5 w-10 items-center rounded-full transition ${
+                            isRunning ? "bg-[#5b4cf0]" : "bg-[#e3e6ee]"
+                          } ${isUpdating ? "cursor-not-allowed opacity-70" : ""}`}
+                        >
+                          <span
+                            className={`absolute h-4 w-4 rounded-full bg-white shadow transition ${
+                              isRunning ? "left-5" : "left-1"
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        className="flex items-center justify-center gap-2 rounded-xl bg-[#cfefff] px-4 py-2 text-sm font-medium text-[#0b7ed9]"
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                        Chat with agent
+                      </button>
+                      <button
+                        type="button"
+                        className="flex items-center justify-center gap-2 rounded-xl border border-[#e1e5ef] px-4 py-2 text-sm font-medium text-[#3a4355]"
+                      >
+                        View Logs
+                        <Eye className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
 
           <button
@@ -387,6 +523,65 @@ export default function DashboardPage() {
           </div>
         </div>
       </section>
+
+      {pendingAction ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 py-8">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_-30px_rgba(15,23,42,0.6)]">
+            <div className="flex items-center justify-between border-b border-[#eef1f7] px-6 py-4">
+              <h4 className="text-lg font-semibold text-[#111827]">
+                {pendingAction.action === "start" ? "Start Agent" : "Stop Agent"}
+              </h4>
+              <button
+                type="button"
+                onClick={() => setPendingAction(null)}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f3f4f6] text-[#111827]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="px-6 py-5">
+              <p className="text-sm text-[#374151]">
+                Are you sure you want to {" "}
+                {pendingAction.action === "start" ? "start" : "stop"}{" "}
+                <span className="font-semibold text-[#111827]">
+                  {pendingAction.agent.name}
+                </span>
+                ?
+              </p>
+              {updateError ? (
+                <p className="mt-3 text-sm text-[#dc2626]">{updateError}</p>
+              ) : null}
+            </div>
+            <div className="flex items-center justify-end gap-3 border-t border-[#eef1f7] px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setPendingAction(null)}
+                className="rounded-xl border border-[#e5e7eb] px-5 py-2 text-sm font-semibold text-[#374151]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmToggle}
+                disabled={isUpdating}
+                className={`rounded-xl px-5 py-2 text-sm font-semibold text-white ${
+                  isUpdating
+                    ? "cursor-not-allowed bg-[#c7c4f7]"
+                    : "bg-[#4f49e2] shadow-[0_10px_24px_-18px_rgba(79,73,226,0.9)] hover:bg-[#433ccf]"
+                }`}
+              >
+                {isUpdating
+                  ? pendingAction.action === "start"
+                    ? "Starting..."
+                    : "Stopping..."
+                  : pendingAction.action === "start"
+                    ? "Start"
+                    : "Stop"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

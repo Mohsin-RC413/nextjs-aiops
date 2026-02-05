@@ -1,7 +1,8 @@
 "use client";
 
-import { Bot, Edit3, Search, Trash2 } from "lucide-react";
+import { Bot, Edit3, Search, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
+import { AGENT_API_BASE_URL } from "@/config/agent";
 
 type AgentRecord = {
   agentId: number;
@@ -16,16 +17,25 @@ type AgentRegistryProps = {
   agents: AgentRecord[];
   isLoading: boolean;
   loadError: string;
+  onDeleteSuccess?: () => void | Promise<void>;
 };
 
 export default function AgentRegistry({
   agents,
   isLoading,
   loadError,
+  onDeleteSuccess,
 }: AgentRegistryProps) {
   const [filter, setFilter] = useState<"all" | "online" | "offline">("all");
   const [searchValue, setSearchValue] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<AgentRecord | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  const deleteBaseUrl = AGENT_API_BASE_URL.endsWith("/")
+    ? AGENT_API_BASE_URL.slice(0, -1)
+    : AGENT_API_BASE_URL;
 
   const filteredAgents = useMemo(() => {
     const normalizedSearch = searchValue.trim().toLowerCase();
@@ -45,6 +55,55 @@ export default function AgentRegistry({
   }, [agents, filter, searchValue]);
 
   const agentCount = agents.length;
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget || isDeleting) {
+      return;
+    }
+
+    setIsDeleting(true);
+    setDeleteError("");
+
+    try {
+      const agentId = deleteTarget.agentId;
+      const url = `${deleteBaseUrl}/aiops/agent/delete/${encodeURIComponent(
+        agentId
+      )}?agentId=${encodeURIComponent(agentId)}`;
+      const response = await fetch(url, {
+        method: "DELETE",
+        headers: { accept: "application/json" },
+      });
+
+      let data: unknown = null;
+      try {
+        data = await response.json();
+      } catch {
+        data = null;
+      }
+
+      console.log("Agent delete response:", {
+        ok: response.ok,
+        status: response.status,
+        data,
+      });
+
+      if (response.ok) {
+        setDeleteTarget(null);
+        await onDeleteSuccess?.();
+        return;
+      }
+
+      const message =
+        typeof data === "object" && data && "message" in data
+          ? String((data as { message?: string }).message)
+          : "Unable to delete agent.";
+      setDeleteError(message);
+    } catch {
+      setDeleteError("Unable to delete agent.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   return (
     <section className="rounded-3xl bg-white p-6 shadow-[0_18px_50px_-38px_rgba(16,24,40,0.5)]">
@@ -210,7 +269,19 @@ export default function AgentRegistry({
                     </button>
                     <button
                       type="button"
-                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ffe4e6] text-[#ef4444]"
+                      onClick={() => {
+                        if (isOnline) {
+                          return;
+                        }
+                        setDeleteTarget(agent);
+                        setDeleteError("");
+                      }}
+                      disabled={isOnline}
+                      className={`flex h-8 w-8 items-center justify-center rounded-lg ${
+                        isOnline
+                          ? "cursor-not-allowed bg-[#f3f4f6] text-[#9ca3af]"
+                          : "bg-[#ffe4e6] text-[#ef4444]"
+                      }`}
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -222,6 +293,58 @@ export default function AgentRegistry({
           </>
         )}
       </div>
+
+      {deleteTarget ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 py-8">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_-30px_rgba(15,23,42,0.6)]">
+            <div className="flex items-center justify-between border-b border-[#eef1f7] px-6 py-4">
+              <h4 className="text-lg font-semibold text-[#111827]">
+                Delete Agent
+              </h4>
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f3f4f6] text-[#111827]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="px-6 py-5">
+              <p className="text-sm text-[#374151]">
+                Are you sure you want to delete{" "}
+                <span className="font-semibold text-[#111827]">
+                  {deleteTarget.name}
+                </span>
+                ?
+              </p>
+              {deleteError ? (
+                <p className="mt-3 text-sm text-[#dc2626]">{deleteError}</p>
+              ) : null}
+            </div>
+            <div className="flex items-center justify-end gap-3 border-t border-[#eef1f7] px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                className="rounded-xl border border-[#e5e7eb] px-5 py-2 text-sm font-semibold text-[#374151]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className={`rounded-xl px-5 py-2 text-sm font-semibold text-white ${
+                  isDeleting
+                    ? "cursor-not-allowed bg-[#fca5a5]"
+                    : "bg-[#ef4444] shadow-[0_10px_24px_-18px_rgba(239,68,68,0.8)] hover:bg-[#dc2626]"
+                }`}
+              >
+                {isDeleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

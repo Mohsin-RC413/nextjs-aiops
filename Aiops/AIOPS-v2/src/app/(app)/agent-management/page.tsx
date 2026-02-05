@@ -26,45 +26,43 @@ export default function AgentManagementPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
 
+  const loadAgents = async (signal?: AbortSignal) => {
+    setIsLoading(true);
+    setLoadError("");
+
+    try {
+      const url = `${AGENT_LIST_URL}?orgKey=${encodeURIComponent(
+        AGENT_ORG_KEY
+      )}`;
+      const response = await fetch(url, {
+        headers: { accept: "application/json" },
+        signal,
+      });
+      const data = await response.json();
+      console.log("Agent list response:", {
+        ok: response.ok,
+        status: response.status,
+        data,
+      });
+
+      if (response.ok && Array.isArray(data?.agents)) {
+        setAgents(data.agents);
+      } else {
+        setLoadError(data?.message || "Unable to load agents.");
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return;
+      }
+      setLoadError("Unable to load agents.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
     const controller = new AbortController();
-
-    const loadAgents = async () => {
-      setIsLoading(true);
-      setLoadError("");
-
-      try {
-        const url = `${AGENT_LIST_URL}?orgKey=${encodeURIComponent(
-          AGENT_ORG_KEY
-        )}`;
-        const response = await fetch(url, {
-          headers: { accept: "application/json" },
-          signal: controller.signal,
-        });
-        const data = await response.json();
-        console.log("Agent list response:", {
-          ok: response.ok,
-          status: response.status,
-          data,
-        });
-
-        if (response.ok && Array.isArray(data?.agents)) {
-          setAgents(data.agents);
-        } else {
-          setLoadError(data?.message || "Unable to load agents.");
-        }
-      } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") {
-          return;
-        }
-        setLoadError("Unable to load agents.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadAgents();
-
+    loadAgents(controller.signal);
     return () => controller.abort();
   }, []);
 
@@ -90,7 +88,7 @@ export default function AgentManagementPage() {
                 Lifecycle, versioning, and health of deployed agents.
               </p>
             </div>
-            <CreateNewAgent />
+            <CreateNewAgent onCreateSuccess={() => loadAgents()} />
           </div>
 
           <AgentStats
@@ -105,6 +103,7 @@ export default function AgentManagementPage() {
         agents={agents}
         isLoading={isLoading}
         loadError={loadError}
+        onDeleteSuccess={() => loadAgents()}
       />
     </div>
   );
