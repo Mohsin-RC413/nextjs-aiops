@@ -6,6 +6,8 @@ import {
   Eye,
   Filter,
   MessageCircle,
+  Send,
+  User,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -18,6 +20,13 @@ type AgentRecord = {
   enterprise: string;
   start_time: string | null;
   stop_time: string | null;
+};
+
+type ChatMessage = {
+  id: string;
+  role: "agent" | "user";
+  text: string;
+  time: string;
 };
 
 export default function AgentManagementSection() {
@@ -35,8 +44,19 @@ export default function AgentManagementSection() {
   >("all");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isSeeAllOpen, setIsSeeAllOpen] = useState(false);
+  const [activeChatAgent, setActiveChatAgent] = useState<AgentRecord | null>(
+    null
+  );
+  const [activeChatKey, setActiveChatKey] = useState<number | null>(null);
+  const [chatInput, setChatInput] = useState("");
+  const [chatError, setChatError] = useState("");
+  const [sendingChatKey, setSendingChatKey] = useState<number | null>(null);
+  const [chatThreads, setChatThreads] = useState<
+    Record<number, ChatMessage[]>
+  >({});
   const agentsRef = useRef<AgentRecord[]>([]);
   const requestIdRef = useRef(0);
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
 
   const agentApiBase = AGENT_API_BASE_URL.endsWith("/")
     ? AGENT_API_BASE_URL.slice(0, -1)
@@ -212,6 +232,172 @@ export default function AgentManagementSection() {
     setIsFilterOpen(false);
   };
 
+  const formatTime = () =>
+    new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+  const openChat = (agent: AgentRecord) => {
+    const chatKey = agent.port ?? null;
+    setActiveChatAgent(agent);
+    setActiveChatKey(chatKey);
+    setChatError("");
+    setChatInput("");
+    if (chatKey === null) {
+      setChatError("Agent is not running.");
+      return;
+    }
+    setChatThreads((prev) => {
+      if (prev[chatKey]) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [chatKey]: [
+          {
+            id: `${chatKey}-welcome`,
+            role: "agent",
+            text: "I am Agent and I'm ready to help.",
+            time: formatTime(),
+          },
+        ],
+      };
+    });
+  };
+
+  const closeChat = () => {
+    setChatThreads({});
+    setActiveChatAgent(null);
+    setActiveChatKey(null);
+    setChatInput("");
+    setChatError("");
+    setSendingChatKey(null);
+  };
+
+  const resolveChatEndpoint = (agent: AgentRecord) => {
+    const enterprise = (agent.enterprise ?? "").toLowerCase();
+    if (enterprise.includes("servicenow")) {
+      return "serviceNow";
+    }
+    if (enterprise.includes("mq")) {
+      return "mq";
+    }
+    return "mule";
+  };
+
+  const appendMessage = (chatKey: number, message: ChatMessage) => {
+    setChatThreads((prev) => ({
+      ...prev,
+      [chatKey]: [...(prev[chatKey] ?? []), message],
+    }));
+  };
+
+  const handleSendMessage = async () => {
+    if (!activeChatAgent) {
+      return;
+    }
+    if (activeChatKey === null) {
+      setChatError("Agent is not running.");
+      return;
+    }
+    const trimmed = chatInput.trim();
+    if (!trimmed) {
+      return;
+    }
+    if (!activeChatAgent.port) {
+      setChatError("Agent is not running.");
+      return;
+    }
+
+    const agentId = activeChatAgent.agentId;
+    const chatKey = activeChatKey;
+    const endpoint = resolveChatEndpoint(activeChatAgent);
+    const url = `http://192.168.18.20:${activeChatAgent.port}/agent/${endpoint}/chat`;
+
+    const userMessage: ChatMessage = {
+      id: `${chatKey}-user-${Date.now()}`,
+      role: "user",
+      text: trimmed,
+      time: formatTime(),
+    };
+    appendMessage(chatKey, userMessage);
+    setChatInput("");
+    setSendingChatKey(chatKey);
+    setChatError("");
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 15000);
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          message: trimmed,
+          agent_id: String(agentId),
+        }),
+      });
+      window.clearTimeout(timeoutId);
+      const contentType = response.headers.get("content-type") || "";
+      const rawText = await response.text();
+      let data: unknown = rawText;
+      if (contentType.includes("application/json")) {
+        try {
+          data = JSON.parse(rawText);
+        } catch {
+          data = rawText;
+        }
+      }
+      console.log("Agent chat response:", {
+        ok: response.ok,
+        status: response.status,
+        data,
+      });
+
+      const replyText =
+        typeof data === "string"
+          ? data
+          : typeof data === "object" && data !== null && "response" in data
+            ? String((data as { response?: string }).response ?? "")
+            : typeof data === "object" && data !== null && "message" in data
+              ? String((data as { message?: string }).message ?? "")
+              : typeof data === "object"
+                ? JSON.stringify(data)
+                : String(data);
+
+      appendMessage(chatKey, {
+        id: `${chatKey}-agent-${Date.now()}`,
+        role: "agent",
+        text: replyText || "Agent responded.",
+        time: formatTime(),
+      });
+    } catch (error) {
+      const errorMessage =
+        error instanceof DOMException && error.name === "AbortError"
+          ? "Request timed out. Please try again."
+          : "Unable to reach agent right now. Please check the agent connection.";
+      appendMessage(chatKey, {
+        id: `${chatKey}-agent-error-${Date.now()}`,
+        role: "agent",
+        text: errorMessage,
+        time: formatTime(),
+      });
+    } finally {
+      setSendingChatKey((prev) => (prev === chatKey ? null : prev));
+    }
+  };
+
+  useEffect(() => {
+    if (!activeChatAgent || !chatScrollRef.current) {
+      return;
+    }
+    chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+  }, [activeChatAgent, chatThreads, sendingChatKey]);
+
   return (
     <div className="rounded-3xl bg-white p-6 shadow-[0_18px_50px_-38px_rgba(16,24,40,0.5)]">
       <div className="flex items-start justify-between">
@@ -349,7 +535,13 @@ export default function AgentManagementSection() {
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   <button
                     type="button"
-                    className="flex items-center justify-center gap-2 rounded-xl bg-[#cfefff] px-4 py-2 text-sm font-medium text-[#0b7ed9]"
+                    onClick={() => openChat(agent)}
+                    disabled={!isRunning}
+                    className={`flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium ${
+                      isRunning
+                        ? "bg-[#cfefff] text-[#0b7ed9]"
+                        : "cursor-not-allowed bg-[#e5e7eb] text-[#9ca3af]"
+                    }`}
                   >
                     <MessageCircle className="h-4 w-4" />
                     Chat with agent
@@ -515,7 +707,13 @@ export default function AgentManagementSection() {
                         <div className="mt-4 grid gap-3 sm:grid-cols-2">
                           <button
                             type="button"
-                            className="flex items-center justify-center gap-2 rounded-xl bg-[#cfefff] px-4 py-2 text-sm font-medium text-[#0b7ed9]"
+                            onClick={() => openChat(agent)}
+                            disabled={!isRunning}
+                            className={`flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium ${
+                              isRunning
+                                ? "bg-[#cfefff] text-[#0b7ed9]"
+                                : "cursor-not-allowed bg-[#e5e7eb] text-[#9ca3af]"
+                            }`}
                           >
                             <MessageCircle className="h-4 w-4" />
                             Chat with agent
@@ -603,6 +801,125 @@ export default function AgentManagementSection() {
                     ? "Start"
                     : "Stop"}
               </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {activeChatAgent ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30 px-6 py-8">
+          <div className="flex h-[80vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl bg-white shadow-[0_24px_70px_-34px_rgba(15,23,42,0.7)]">
+            <div className="flex items-center justify-between border-b border-[#eef1f7] px-8 py-6">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#eef2ff] text-[#4f49e2]">
+                  <Bot className="h-6 w-6" />
+                </div>
+                <div>
+                  <h4 className="text-lg font-semibold text-[#111827]">
+                    {activeChatAgent.name}
+                  </h4>
+                  <p className="text-sm text-[#6b7280]">Agent chat</p>
+                  <div className="mt-2 flex items-center gap-2 text-xs text-[#6b7280]">
+                    <span className="h-3 w-3 rounded-full bg-[#16a34a]" />
+                    <span>Online</span>
+                    <span className="text-[#cbd5e1]">•</span>
+                    <span>
+                      Running at: {activeChatAgent.port ?? "Agent Not Started"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeChat}
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-[#e5e7eb] text-[#111827]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 min-h-0 px-8 pb-6 pt-4">
+              <div
+                ref={chatScrollRef}
+                className="h-full min-h-0 overflow-y-auto rounded-2xl border border-[#e6eaf3] bg-[#f7f8fc] p-6"
+              >
+                {(activeChatKey !== null
+                  ? chatThreads[activeChatKey] ?? []
+                  : []
+                ).map((message) => (
+                  <div
+                    key={message.id}
+                    className={`mb-6 flex ${
+                      message.role === "user" ? "justify-end" : "justify-start"
+                    }`}
+                  >
+                    {message.role === "agent" ? (
+                      <div className="flex max-w-[70%] gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eef2ff] text-[#4f49e2]">
+                          <Bot className="h-5 w-5" />
+                        </div>
+                        <div className="rounded-2xl bg-[#edf1f8] px-4 py-3 text-sm text-[#1f2937] shadow-sm">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8a94a6]">
+                            Agent
+                          </p>
+                          <p className="mt-2 whitespace-pre-wrap break-words">
+                            {message.text}
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex max-w-[70%] items-start gap-3">
+                        <div className="rounded-2xl border border-[#e5e7eb] bg-white px-4 py-3 text-sm text-[#111827] shadow-sm">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8a94a6] text-right">
+                            You
+                          </p>
+                          <p className="mt-2 whitespace-pre-wrap break-words text-right">
+                            {message.text}
+                          </p>
+                        </div>
+                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#e5e7eb] bg-white text-[#111827]">
+                          <User className="h-5 w-5" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {sendingChatKey === activeChatKey && activeChatKey !== null ? (
+                  <div className="text-sm text-[#8a94a6]">Agent is typing...</div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="border-t border-[#eef1f7] px-8 py-4">
+              {chatError ? (
+                <p className="mb-3 text-sm text-[#dc2626]">{chatError}</p>
+              ) : null}
+              <div className="flex items-center gap-3 rounded-2xl border border-[#e5e7eb] bg-[#f7f8fc] px-4 py-3">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(event) => setChatInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
+                  placeholder="Ask something..."
+                  className="flex-1 bg-transparent text-sm text-[#111827] outline-none placeholder:text-[#9ca3af]"
+                />
+                <button
+                  type="button"
+                  onClick={handleSendMessage}
+                  disabled={
+                    sendingChatKey === activeChatKey && activeChatKey !== null
+                  }
+                  className="flex items-center gap-2 rounded-xl bg-[#cfefff] px-4 py-2 text-sm font-semibold text-[#0b7ed9] disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  Submit
+                </button>
+              </div>
             </div>
           </div>
         </div>
