@@ -391,7 +391,7 @@ export default function DashboardOverview() {
             return (
               <div
                 key={card.title}
-                className="rounded-2xl bg-white p-5 shadow-[0_12px_30px_-28px_rgba(16,24,40,0.45)] ring-1 ring-[#eef1f7]"
+                className="flex flex-col items-center rounded-2xl bg-white p-5 text-center shadow-[0_12px_30px_-28px_rgba(16,24,40,0.45)] ring-1 ring-[#eef1f7]"
               >
                 <div
                   className={`flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br ${card.bg} text-white shadow-[0_10px_20px_-12px_rgba(0,0,0,0.45)]`}
@@ -401,7 +401,7 @@ export default function DashboardOverview() {
                 <p className="mt-6 text-sm font-semibold text-[#5a6476]">
                   {card.title}
                 </p>
-                <p className="mt-2 flex items-center gap-2 text-3xl font-semibold text-[#0f1115]">
+                <p className="mt-2 flex items-center justify-center gap-2 text-3xl font-semibold text-[#0f1115]">
                   {"isLoading" in card && card.isLoading ? (
                     <Loader2 className="h-6 w-6 animate-spin text-[#5b4cf0]" />
                   ) : (
