@@ -217,6 +217,9 @@ export default function AgentManagementSection() {
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[#ecebff] text-[#5b4cf0]">
+              <Bot className="h-5 w-5" />
+            </span>
             <h3 className="text-lg font-semibold text-[#111827]">
               Agent management
             </h3>

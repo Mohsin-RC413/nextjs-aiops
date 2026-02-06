@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Bot, RefreshCw, Sparkles } from "lucide-react";
+import { Activity, Bell, Bot, RefreshCw, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { AGENT_API_BASE_URL, AGENT_ORG_KEY } from "@/config/agent";
@@ -383,13 +383,18 @@ export default function AgentActivityLog() {
   return (
     <div className="rounded-3xl bg-white p-6 shadow-[0_18px_50px_-38px_rgba(16,24,40,0.5)]">
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <h3 className="text-lg font-semibold text-[#111827]">
-            Agent Activity Log
-          </h3>
+        <div className="flex items-start gap-3">
+          <span className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-2xl bg-[#e6f9ee] text-[#16a34a]">
+            <Activity className="h-5 w-5" />
+          </span>
+          <div>
+            <h3 className="text-lg font-semibold text-[#111827]">
+              Agent Activity Log
+            </h3>
           <p className="mt-1 text-sm text-[#5b6476]">
             {isLoadingAgents ? "Checking for Mule agent..." : headerText}
           </p>
+          </div>
         </div>
         <button
           type="button"

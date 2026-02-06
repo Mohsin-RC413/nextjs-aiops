@@ -1,7 +1,7 @@
 "use client";
 
 import { AGENT_API_BASE_URL, AGENT_ORG_KEY } from "@/config/agent";
-import { ChevronLeft, ChevronRight, RefreshCw, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, RefreshCw, TriangleAlert, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type IncidentItem = {
@@ -212,6 +212,9 @@ export default function IncidentDetails() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[#ffe9e1] text-[#ff7a45]">
+              <TriangleAlert className="h-5 w-5" />
+            </span>
             <h3 className="text-lg font-semibold text-[#111827]">
               Incident details
             </h3>

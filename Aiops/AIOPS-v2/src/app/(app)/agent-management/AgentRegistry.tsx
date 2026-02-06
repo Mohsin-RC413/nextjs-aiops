@@ -3,6 +3,7 @@
 import {
   Bot,
   BookOpen,
+  ChevronDown,
   Edit3,
   Eye,
   ListChecks,
@@ -43,6 +44,106 @@ type RulesetItem = {
   ruleset_id: number;
 };
 
+type SelectOption = { value: string; label: string };
+
+type RoundedSelectProps = {
+  value: string;
+  options: SelectOption[];
+  placeholder: string;
+  disabled?: boolean;
+  loading?: boolean;
+  onChange: (value: string) => void;
+};
+
+function RoundedSelect({
+  value,
+  options,
+  placeholder,
+  disabled,
+  loading,
+  onChange,
+}: RoundedSelectProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen]);
+
+  const selectedLabel =
+    options.find((option) => option.value === value)?.label ?? "";
+  const displayLabel = loading ? "Loading..." : selectedLabel || placeholder;
+  const displayClass = loading || !value ? "text-[#9ca3af]" : "text-[#111827]";
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => {
+          if (disabled || loading) {
+            return;
+          }
+          setIsOpen((prev) => !prev);
+        }}
+        className={`flex w-full items-center justify-between rounded-xl border px-4 py-2.5 text-sm outline-none transition focus-within:border-[#4f49e2] focus-within:ring-2 focus-within:ring-[#4f49e2]/20 ${
+          disabled || loading
+            ? "cursor-not-allowed border-[#e5e7eb] bg-[#edf0f6]"
+            : "border-[#e0e5f0] bg-white"
+        }`}
+      >
+        <span className={displayClass}>{displayLabel}</span>
+        <ChevronDown className="h-4 w-4 text-[#9ca3af]" />
+      </button>
+
+      {isOpen && !disabled && !loading ? (
+        <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-[0_12px_24px_-20px_rgba(15,23,42,0.35)]">
+          <button
+            type="button"
+            onClick={() => {
+              onChange("");
+              setIsOpen(false);
+            }}
+            className="w-full px-4 py-2 text-left text-sm text-[#6b7280] hover:bg-[#eef2ff]"
+          >
+            {placeholder}
+          </button>
+          <div className="max-h-56 overflow-auto">
+            {options.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => {
+                  onChange(option.value);
+                  setIsOpen(false);
+                }}
+                className={`w-full px-4 py-2 text-left text-sm ${
+                  option.value === value
+                    ? "bg-[#eef2ff] text-[#4f49e2]"
+                    : "text-[#111827] hover:bg-[#f3f4f6]"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function AgentRegistry({
   agents,
   isLoading,
@@ -64,23 +165,15 @@ export default function AgentRegistry({
   const [deleteRulesetTarget, setDeleteRulesetTarget] =
     useState<RulesetItem | null>(null);
   const [isDeletingRuleset, setIsDeletingRuleset] = useState(false);
-  const [platformOptions, setPlatformOptions] = useState<
-    { label: string; value: string }[]
-  >([]);
-  const [applicationOptions, setApplicationOptions] = useState<
-    { label: string; value: string }[]
-  >([]);
-  const [ticketOptions, setTicketOptions] = useState<
-    { label: string; value: string }[]
-  >([]);
-  const [frequencyOptions, setFrequencyOptions] = useState<
-    { label: string; value: string }[]
-  >([]);
-  const [statusOptions, setStatusOptions] = useState<
-    { label: string; value: string }[]
-  >([]);
+  const [platformOptions, setPlatformOptions] = useState<SelectOption[]>([]);
+  const [applicationOptions, setApplicationOptions] = useState<SelectOption[]>(
+    []
+  );
+  const [ticketOptions, setTicketOptions] = useState<SelectOption[]>([]);
+  const [frequencyOptions, setFrequencyOptions] = useState<SelectOption[]>([]);
+  const [statusOptions, setStatusOptions] = useState<SelectOption[]>([]);
   const [notificationOptions, setNotificationOptions] = useState<
-    { label: string; value: string }[]
+    SelectOption[]
   >([]);
   const [selectedPlatform, setSelectedPlatform] = useState("");
   const [selectedApplication, setSelectedApplication] = useState("");
@@ -1148,205 +1241,167 @@ export default function AgentRegistry({
                           </p>
                         ) : null}
                         <div className="grid gap-6 md:grid-cols-2">
-                          <label className="text-sm font-semibold text-[#111827]">
-                            Platform
-                            <select
-                              value={selectedPlatform}
-                              onChange={(event) => {
-                                const value = event.target.value;
-                                setSelectedPlatform(value);
-                                setSelectedApplication("");
-                                setApplicationOptions([]);
-                                setTicketOptions([]);
-                                setFrequencyOptions([]);
-                                setStatusOptions([]);
-                                setNotificationOptions([]);
-                                setSelectedTicket("");
-                                setSelectedFrequency("");
-                                setSelectedStatuses([]);
-                                setSelectedNotifications([]);
-                                if (previousAppRef.current) {
-                                  localStorage.removeItem(
-                                    `agent-settings-ticket-${editTarget?.agentId}-${previousAppRef.current}`
-                                  );
-                                  localStorage.removeItem(
-                                    `agent-settings-frequency-${editTarget?.agentId}-${previousAppRef.current}`
-                                  );
-                                  localStorage.removeItem(
-                                    `agent-settings-status-${editTarget?.agentId}-${previousAppRef.current}`
-                                  );
-                                  localStorage.removeItem(
-                                    `agent-settings-notifications-${editTarget?.agentId}-${previousAppRef.current}`
-                                  );
-                                }
-                                previousAppRef.current = null;
-                                if (value) {
-                                  localStorage.setItem(
-                                    `agent-settings-application-${editTarget?.agentId}`,
-                                    value
-                                  );
-                                } else {
-                                  localStorage.removeItem(
-                                    `agent-settings-application-${editTarget?.agentId}`
-                                  );
-                                }
-                                localStorage.removeItem(
-                                  `agent-settings-platform-${editTarget?.agentId}`
-                                );
-                              }}
-                              className="mt-2 w-full rounded-xl border border-[#e0e5f0] bg-white px-4 py-2.5 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#c7c4f7]"
-                            >
-                              <option value="">
-                                {isPlatformLoading
-                                  ? "Loading platforms..."
-                                  : "Select Platform"}
-                              </option>
-                              {platformOptions.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label className="text-sm font-semibold text-[#111827]">
-                            Application
-                            <select
-                              value={selectedApplication}
-                              onChange={(event) => {
-                                const value = event.target.value;
-                                setSelectedApplication(value);
-                                setSelectedTicket("");
-                                setSelectedFrequency("");
-                                setSelectedStatuses([]);
-                                setSelectedNotifications([]);
-                                if (previousAppRef.current) {
-                                  localStorage.removeItem(
-                                    `agent-settings-ticket-${editTarget?.agentId}-${previousAppRef.current}`
-                                  );
-                                  localStorage.removeItem(
-                                    `agent-settings-frequency-${editTarget?.agentId}-${previousAppRef.current}`
-                                  );
-                                  localStorage.removeItem(
-                                    `agent-settings-status-${editTarget?.agentId}-${previousAppRef.current}`
-                                  );
-                                  localStorage.removeItem(
-                                    `agent-settings-notifications-${editTarget?.agentId}-${previousAppRef.current}`
-                                  );
-                                }
-                                previousAppRef.current = value || null;
-                                if (value) {
-                                  localStorage.setItem(
-                                    `agent-settings-platform-${editTarget?.agentId}`,
-                                    value
-                                  );
-                                } else {
+                          <div className="text-sm font-semibold text-[#111827]">
+                            <span>Platform</span>
+                            <div className="mt-2">
+                              <RoundedSelect
+                                value={selectedPlatform}
+                                options={platformOptions}
+                                placeholder="Select Platform"
+                                loading={isPlatformLoading}
+                                onChange={(value) => {
+                                  setSelectedPlatform(value);
+                                  setSelectedApplication("");
+                                  setApplicationOptions([]);
+                                  setTicketOptions([]);
+                                  setFrequencyOptions([]);
+                                  setStatusOptions([]);
+                                  setNotificationOptions([]);
+                                  setSelectedTicket("");
+                                  setSelectedFrequency("");
+                                  setSelectedStatuses([]);
+                                  setSelectedNotifications([]);
+                                  if (previousAppRef.current) {
+                                    localStorage.removeItem(
+                                      `agent-settings-ticket-${editTarget?.agentId}-${previousAppRef.current}`
+                                    );
+                                    localStorage.removeItem(
+                                      `agent-settings-frequency-${editTarget?.agentId}-${previousAppRef.current}`
+                                    );
+                                    localStorage.removeItem(
+                                      `agent-settings-status-${editTarget?.agentId}-${previousAppRef.current}`
+                                    );
+                                    localStorage.removeItem(
+                                      `agent-settings-notifications-${editTarget?.agentId}-${previousAppRef.current}`
+                                    );
+                                  }
+                                  previousAppRef.current = null;
+                                  if (value) {
+                                    localStorage.setItem(
+                                      `agent-settings-application-${editTarget?.agentId}`,
+                                      value
+                                    );
+                                  } else {
+                                    localStorage.removeItem(
+                                      `agent-settings-application-${editTarget?.agentId}`
+                                    );
+                                  }
                                   localStorage.removeItem(
                                     `agent-settings-platform-${editTarget?.agentId}`
                                   );
+                                }}
+                              />
+                            </div>
+                          </div>
+                          <div className="text-sm font-semibold text-[#111827]">
+                            <span>Application</span>
+                            <div className="mt-2">
+                              <RoundedSelect
+                                value={selectedApplication}
+                                options={applicationOptions}
+                                placeholder={
+                                  selectedPlatform
+                                    ? "Select application"
+                                    : "Select application first"
                                 }
-                              }}
-                              disabled={!selectedPlatform || isApplicationLoading}
-                              className={`mt-2 w-full rounded-xl border border-[#e0e5f0] px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#c7c4f7] ${
-                                !selectedPlatform || isApplicationLoading
-                                  ? "bg-[#edf0f6] text-[#94a3b8]"
-                                  : "bg-white text-[#111827]"
-                              }`}
-                            >
-                              <option value="">
-                                {selectedPlatform
-                                  ? isApplicationLoading
-                                    ? "Loading applications..."
-                                    : "Select application"
-                                  : "Select application first"}
-                              </option>
-                              {applicationOptions.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
+                                disabled={!selectedPlatform}
+                                loading={isApplicationLoading}
+                                onChange={(value) => {
+                                  setSelectedApplication(value);
+                                  setSelectedTicket("");
+                                  setSelectedFrequency("");
+                                  setSelectedStatuses([]);
+                                  setSelectedNotifications([]);
+                                  if (previousAppRef.current) {
+                                    localStorage.removeItem(
+                                      `agent-settings-ticket-${editTarget?.agentId}-${previousAppRef.current}`
+                                    );
+                                    localStorage.removeItem(
+                                      `agent-settings-frequency-${editTarget?.agentId}-${previousAppRef.current}`
+                                    );
+                                    localStorage.removeItem(
+                                      `agent-settings-status-${editTarget?.agentId}-${previousAppRef.current}`
+                                    );
+                                    localStorage.removeItem(
+                                      `agent-settings-notifications-${editTarget?.agentId}-${previousAppRef.current}`
+                                    );
+                                  }
+                                  previousAppRef.current = value || null;
+                                  if (value) {
+                                    localStorage.setItem(
+                                      `agent-settings-platform-${editTarget?.agentId}`,
+                                      value
+                                    );
+                                  } else {
+                                    localStorage.removeItem(
+                                      `agent-settings-platform-${editTarget?.agentId}`
+                                    );
+                                  }
+                                }}
+                              />
+                            </div>
+                          </div>
                         </div>
 
                         <div className="mt-6 grid gap-6 md:grid-cols-2">
-                          <label className="text-sm font-semibold text-[#111827]">
-                            Ticketing Running Agent
-                            <select
-                              value={selectedTicket}
-                              onChange={(event) => {
-                                const value = event.target.value;
-                                setSelectedTicket(value);
-                                if (value && editTarget && selectedApplication) {
-                                  localStorage.setItem(
-                                    `agent-settings-ticket-${editTarget.agentId}-${selectedApplication}`,
-                                    value
-                                  );
-                                } else if (editTarget && selectedApplication) {
-                                  localStorage.removeItem(
-                                    `agent-settings-ticket-${editTarget.agentId}-${selectedApplication}`
-                                  );
+                          <div className="text-sm font-semibold text-[#111827]">
+                            <span>Ticketing Running Agent</span>
+                            <div className="mt-2">
+                              <RoundedSelect
+                                value={selectedTicket}
+                                options={ticketOptions}
+                                placeholder={
+                                  selectedApplication
+                                    ? "Select ticketing agent"
+                                    : "Select application first"
                                 }
-                              }}
-                              disabled={!selectedApplication || isTicketLoading}
-                              className={`mt-2 w-full rounded-xl border border-[#e0e5f0] px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#c7c4f7] ${
-                                !selectedApplication || isTicketLoading
-                                  ? "bg-[#edf0f6] text-[#94a3b8]"
-                                  : "bg-white text-[#111827]"
-                              }`}
-                            >
-                              <option value="">
-                                {selectedApplication
-                                  ? isTicketLoading
-                                    ? "Loading ticketing agents..."
-                                    : "Select ticketing agent"
-                                  : "Select application first"}
-                              </option>
-                              {ticketOptions.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label className="text-sm font-semibold text-[#111827]">
-                            Frequency
-                            <select
-                              value={selectedFrequency}
-                              onChange={(event) => {
-                                const value = event.target.value;
-                                setSelectedFrequency(value);
-                                if (value && editTarget && selectedApplication) {
-                                  localStorage.setItem(
-                                    `agent-settings-frequency-${editTarget.agentId}-${selectedApplication}`,
-                                    value
-                                  );
-                                } else if (editTarget && selectedApplication) {
-                                  localStorage.removeItem(
-                                    `agent-settings-frequency-${editTarget.agentId}-${selectedApplication}`
-                                  );
+                                disabled={!selectedApplication}
+                                loading={isTicketLoading}
+                                onChange={(value) => {
+                                  setSelectedTicket(value);
+                                  if (value && editTarget && selectedApplication) {
+                                    localStorage.setItem(
+                                      `agent-settings-ticket-${editTarget.agentId}-${selectedApplication}`,
+                                      value
+                                    );
+                                  } else if (editTarget && selectedApplication) {
+                                    localStorage.removeItem(
+                                      `agent-settings-ticket-${editTarget.agentId}-${selectedApplication}`
+                                    );
+                                  }
+                                }}
+                              />
+                            </div>
+                          </div>
+                          <div className="text-sm font-semibold text-[#111827]">
+                            <span>Frequency</span>
+                            <div className="mt-2">
+                              <RoundedSelect
+                                value={selectedFrequency}
+                                options={frequencyOptions}
+                                placeholder={
+                                  selectedApplication
+                                    ? "Select frequency"
+                                    : "Select application first"
                                 }
-                              }}
-                              disabled={!selectedApplication || isFrequencyLoading}
-                              className={`mt-2 w-full rounded-xl border border-[#e0e5f0] px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#c7c4f7] ${
-                                !selectedApplication || isFrequencyLoading
-                                  ? "bg-[#edf0f6] text-[#94a3b8]"
-                                  : "bg-white text-[#111827]"
-                              }`}
-                            >
-                              <option value="">
-                                {selectedApplication
-                                  ? isFrequencyLoading
-                                    ? "Loading frequency..."
-                                    : "Select frequency"
-                                  : "Select application first"}
-                              </option>
-                              {frequencyOptions.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
+                                disabled={!selectedApplication}
+                                loading={isFrequencyLoading}
+                                onChange={(value) => {
+                                  setSelectedFrequency(value);
+                                  if (value && editTarget && selectedApplication) {
+                                    localStorage.setItem(
+                                      `agent-settings-frequency-${editTarget.agentId}-${selectedApplication}`,
+                                      value
+                                    );
+                                  } else if (editTarget && selectedApplication) {
+                                    localStorage.removeItem(
+                                      `agent-settings-frequency-${editTarget.agentId}-${selectedApplication}`
+                                    );
+                                  }
+                                }}
+                              />
+                            </div>
+                          </div>
                         </div>
 
                         <div className="mt-6 grid gap-6 md:grid-cols-2">
