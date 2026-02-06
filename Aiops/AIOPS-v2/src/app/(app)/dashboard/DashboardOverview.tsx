@@ -9,6 +9,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 
 type AgentRecord = {
   agentId: number;
@@ -59,6 +60,7 @@ export default function DashboardOverview() {
   const lastAutoRefreshRef = useRef(0);
   const initialLoadRef = useRef(false);
   const AUTO_REFRESH_COOLDOWN_MS = 1500;
+  const pathname = usePathname();
 
   const loadIncidentDetailsForAgent = useCallback(
     async (
@@ -225,6 +227,13 @@ export default function DashboardOverview() {
     loadIncidentCount(controller.signal);
     return () => controller.abort();
   }, [loadIncidentCount]);
+
+  useEffect(() => {
+    if (!pathname?.includes("dashboard")) {
+      return;
+    }
+    loadIncidentCount(undefined, { force: true });
+  }, [pathname, loadIncidentCount]);
 
   useEffect(() => {
     const handleVisibility = () => {

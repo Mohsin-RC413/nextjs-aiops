@@ -1,8 +1,15 @@
 "use client";
 
 import { AGENT_API_BASE_URL, AGENT_ORG_KEY } from "@/config/agent";
-import { ChevronLeft, ChevronRight, RefreshCw, TriangleAlert, X } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  RefreshCw,
+  TriangleAlert,
+  X,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 
 type IncidentItem = {
   number: string;
@@ -33,6 +40,7 @@ export default function IncidentDetails() {
     useState<IncidentItem | null>(null);
   const [lastRefresh, setLastRefresh] = useState<string>("");
   const requestIdRef = useRef(0);
+  const pathname = usePathname();
 
   const agentApiBase = AGENT_API_BASE_URL.endsWith("/")
     ? AGENT_API_BASE_URL.slice(0, -1)
@@ -120,6 +128,13 @@ export default function IncidentDetails() {
     loadIncidents({ signal: controller.signal });
     return () => controller.abort();
   }, [loadIncidents]);
+
+  useEffect(() => {
+    if (!pathname?.includes("dashboard")) {
+      return;
+    }
+    loadIncidents({ force: true });
+  }, [pathname, loadIncidents]);
 
   useEffect(() => {
     setCurrentPage(1);
