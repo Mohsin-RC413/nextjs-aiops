@@ -6,9 +6,8 @@ import {
   Eye,
   Filter,
   MessageCircle,
-  Send,
   User,
-  X,
+  X
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -504,7 +503,7 @@ export default function AgentManagementSection() {
                         {agent.name}
                       </p>
                       <p className="text-xs text-[#647087]">
-                        Running at: {runningAt} - v1.0.0
+                        Running at: {runningAt} 
                       </p>
                     </div>
                   </div>

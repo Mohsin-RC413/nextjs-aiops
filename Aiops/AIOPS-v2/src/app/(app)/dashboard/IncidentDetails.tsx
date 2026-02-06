@@ -4,7 +4,6 @@ import { AGENT_API_BASE_URL, AGENT_ORG_KEY } from "@/config/agent";
 import {
   ChevronLeft,
   ChevronRight,
-  RefreshCw,
   TriangleAlert,
   X,
 } from "lucide-react";
@@ -34,6 +33,7 @@ export default function IncidentDetails() {
   const [incidents, setIncidents] = useState<IncidentItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [isServiceNowActive, setIsServiceNowActive] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [filter, setFilter] = useState<"all" | "open" | "closed">("all");
   const [selectedIncident, setSelectedIncident] =
@@ -81,9 +81,13 @@ export default function IncidentDetails() {
 
         if (!serviceNowAgent) {
           setIncidents([]);
+          setError("");
+          setIsServiceNowActive(false);
           setLastRefresh(new Date().toLocaleString());
           return;
         }
+
+        setIsServiceNowActive(true);
 
         const detailsUrl = `http://192.168.18.20:${serviceNowAgent.port}/agent/serviceNow/incidentDetails`;
         const detailsResponse = await fetch(detailsUrl, {
@@ -137,6 +141,44 @@ export default function IncidentDetails() {
   }, [pathname, loadIncidents]);
 
   useEffect(() => {
+    const handleRefresh = () => {
+      loadIncidents({ force: true });
+    };
+    window.addEventListener("incidents:refresh", handleRefresh);
+    return () => {
+      window.removeEventListener("incidents:refresh", handleRefresh);
+    };
+  }, [loadIncidents]);
+
+  useEffect(() => {
+    const handleAgentStatusChanged = (event: Event) => {
+      const detail = (event as CustomEvent)?.detail as
+        | {
+            enterprise?: string | null;
+            action?: "start" | "stop";
+          }
+        | undefined;
+      if (detail?.enterprise?.trim().toLowerCase() !== "servicenow") {
+        return;
+      }
+      if (detail.action === "stop") {
+        setIncidents([]);
+        setError("");
+        setIsServiceNowActive(false);
+        setLastRefresh(new Date().toLocaleString());
+        return;
+      }
+      if (detail.action === "start") {
+        loadIncidents({ force: true });
+      }
+    };
+    window.addEventListener("agents:statusChanged", handleAgentStatusChanged);
+    return () => {
+      window.removeEventListener("agents:statusChanged", handleAgentStatusChanged);
+    };
+  }, [loadIncidents]);
+
+  useEffect(() => {
     setCurrentPage(1);
   }, [filter, incidents.length]);
 
@@ -163,10 +205,6 @@ export default function IncidentDetails() {
     (currentPage - 1) * ROWS_PER_PAGE,
     currentPage * ROWS_PER_PAGE
   );
-
-  const handleRefresh = () => {
-    loadIncidents({ force: true });
-  };
 
   const renderTable = (expanded: boolean) => (
     <div className="mt-5 overflow-hidden rounded-2xl border border-[#eef1f7]">
@@ -279,22 +317,6 @@ export default function IncidentDetails() {
               All
             </button>
           </div>
-          <button
-            type="button"
-            onClick={handleRefresh}
-            disabled={isLoading}
-            className={`inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#e3e7f2] bg-white text-[#6b7280] shadow-[0_8px_16px_-14px_rgba(16,24,40,0.4)] transition ${
-              isLoading
-                ? "cursor-not-allowed opacity-60"
-                : "hover:text-[#4f49e2]"
-            }`}
-            aria-label="Refresh incidents"
-            title="Refresh incidents"
-          >
-            <RefreshCw
-              className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
-            />
-          </button>
         </div>
       </div>
 
@@ -305,6 +327,10 @@ export default function IncidentDetails() {
       ) : error ? (
         <div className="mt-5 rounded-2xl border border-[#fee2e2] bg-[#fff5f5] px-5 py-6 text-sm text-[#b91c1c]">
           {error}
+        </div>
+      ) : !isServiceNowActive ? (
+        <div className="mt-5 rounded-2xl border border-[#eef1f7] bg-white px-5 py-6 text-sm text-[#647087]">
+          Create or Turn on servicenow agent to view details.
         </div>
       ) : (
         renderTable(false)

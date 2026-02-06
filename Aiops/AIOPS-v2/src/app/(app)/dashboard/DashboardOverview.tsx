@@ -325,42 +325,52 @@ export default function DashboardOverview() {
 
   return (
     <section className="relative rounded-3xl bg-white px-8 py-7 shadow-[0_18px_50px_-38px_rgba(16,24,40,0.5)]">
-      <button
-        type="button"
-        onClick={() => {
-          const cached = serviceNowAgentRef.current;
-          if (cached && typeof cached.port === "number") {
-            loadIncidentDetailsForAgent(cached.agentId, cached.port, undefined, {
-              force: true,
-            });
-            return;
-          }
-          loadIncidentCount(undefined, { force: true });
-        }}
-        disabled={isIncidentLoading || isDetailsLoading}
-        className={`absolute right-8 top-7 inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#e3e7f2] bg-white text-[#6b7280] shadow-[0_8px_16px_-14px_rgba(16,24,40,0.4)] transition ${
-          isIncidentLoading || isDetailsLoading
-            ? "cursor-not-allowed opacity-60"
-            : "hover:text-[#4f49e2]"
-        }`}
-        aria-label="Refresh incidents"
-        title="Refresh incidents"
-      >
-        <RefreshCw
-          className={`h-4 w-4 ${
-            isIncidentLoading || isDetailsLoading ? "animate-spin" : ""
-          }`}
-        />
-      </button>
       <div className="grid gap-6 lg:grid-cols-[1.05fr_2fr]">
         <div className="space-y-6">
-          <div>
-            <h2 className="text-2xl font-semibold text-[#10131a]">
-              Welcome back, Alice!
-            </h2>
-            <p className="mt-2 text-sm text-[#5b6476]">
-              Here's what's happening with your infrastructure today
-            </p>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-semibold text-[#10131a]">
+                Welcome back, Alice!
+              </h2>
+              <p className="mt-2 text-sm text-[#5b6476]">
+                Here's what's happening with your infrastructure today
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const cached = serviceNowAgentRef.current;
+                if (cached && typeof cached.port === "number") {
+                  loadIncidentDetailsForAgent(
+                    cached.agentId,
+                    cached.port,
+                    undefined,
+                    {
+                      force: true,
+                    }
+                  );
+                  window.dispatchEvent(new CustomEvent("incidents:refresh"));
+                  return;
+                }
+                loadIncidentCount(undefined, { force: true });
+                window.dispatchEvent(new CustomEvent("incidents:refresh"));
+              }}
+              disabled={isIncidentLoading || isDetailsLoading}
+              className={`inline-flex items-center gap-2 rounded-xl border border-[#e3e7f2] bg-white px-4 py-2 text-sm font-semibold text-[#4f49e2] shadow-[0_10px_24px_-16px_rgba(16,24,40,0.35)] transition ${
+                isIncidentLoading || isDetailsLoading
+                  ? "cursor-not-allowed opacity-60"
+                  : "hover:border-[#c7d2fe] hover:text-[#4338ca]"
+              }`}
+              aria-label="Refresh Incident details"
+              title="Refresh Incident details"
+            >
+              <RefreshCw
+                className={`h-4 w-4 ${
+                  isIncidentLoading || isDetailsLoading ? "animate-spin" : ""
+                }`}
+              />
+              Refresh Incident details
+            </button>
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm font-semibold text-[#1d2433]">
