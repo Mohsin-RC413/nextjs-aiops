@@ -120,9 +120,9 @@ function RoundedSelect({
             {placeholder}
           </button>
           <div className="max-h-56 overflow-auto">
-            {options.map((option) => (
+            {options.map((option, index) => (
               <button
-                key={option.value}
+                key={`${option.value}-${index}`}
                 type="button"
                 onClick={() => {
                   onChange(option.value);
@@ -650,6 +650,42 @@ export default function AgentRegistry({
       if (isSuccess) {
         setToastMessage("Ruleset Added Successfully");
         setIsToastVisible(true);
+        setRulesetTab("view");
+        setSelectedPlatform("");
+        setSelectedApplication("");
+        setSelectedTicket("");
+        setSelectedFrequency("");
+        setSelectedStatuses([]);
+        setSelectedNotifications([]);
+        setPlatformOptions([]);
+        setApplicationOptions([]);
+        setTicketOptions([]);
+        setFrequencyOptions([]);
+        setStatusOptions([]);
+        setNotificationOptions([]);
+        if (editTarget) {
+          localStorage.removeItem(
+            `agent-settings-application-${editTarget.agentId}`
+          );
+          localStorage.removeItem(
+            `agent-settings-platform-${editTarget.agentId}`
+          );
+          if (previousAppRef.current) {
+            localStorage.removeItem(
+              `agent-settings-ticket-${editTarget.agentId}-${previousAppRef.current}`
+            );
+            localStorage.removeItem(
+              `agent-settings-frequency-${editTarget.agentId}-${previousAppRef.current}`
+            );
+            localStorage.removeItem(
+              `agent-settings-status-${editTarget.agentId}-${previousAppRef.current}`
+            );
+            localStorage.removeItem(
+              `agent-settings-notifications-${editTarget.agentId}-${previousAppRef.current}`
+            );
+          }
+        }
+        previousAppRef.current = null;
         return;
       }
 
@@ -1014,7 +1050,7 @@ export default function AgentRegistry({
 
       {editTarget ? (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30 px-4 py-8">
-          <div className="w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_-30px_rgba(15,23,42,0.6)]">
+          <div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_-30px_rgba(15,23,42,0.6)]">
             <div className="flex items-center justify-between bg-[#4f49e2] px-6 py-4 text-white">
               <h4 className="text-lg font-semibold">Agent settings</h4>
               <button
@@ -1025,7 +1061,7 @@ export default function AgentRegistry({
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="px-6 py-5">
+            <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5">
               <div className="flex items-center gap-3">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#eef2ff] text-[#4f49e2]">
                   <Bot className="h-5 w-5" />
