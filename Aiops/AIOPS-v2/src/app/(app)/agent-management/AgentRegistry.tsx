@@ -4,11 +4,11 @@ import {
   Bot,
   BookOpen,
   ChevronDown,
-  Edit3,
   Eye,
   ListChecks,
   Plus,
   Search,
+  Settings,
   Shield,
   Trash2,
   X,
@@ -896,6 +896,9 @@ export default function AgentRegistry({
             <div className="divide-y divide-[#eef1f7] bg-white">
               {pagedAgents.map((agent, index) => {
                 const isOnline = agent.status?.toUpperCase() === "STARTED";
+                const isMuleAgent = agent.enterprise
+                  ?.toLowerCase()
+                  .includes("mule");
                 const runningAt = agent.port
                   ? agent.port.toString()
                   : "Agent Not Started";
@@ -931,10 +934,20 @@ export default function AgentRegistry({
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => setEditTarget(agent)}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#e5e7eb] text-[#111827]"
+                      onClick={() => {
+                        if (!isMuleAgent) {
+                          return;
+                        }
+                        setEditTarget(agent);
+                      }}
+                      disabled={!isMuleAgent}
+                      className={`flex h-8 w-8 items-center justify-center rounded-lg ${
+                        isMuleAgent
+                          ? "bg-[#e5e7eb] text-[#111827]"
+                          : "cursor-not-allowed bg-[#f3f4f6] text-[#9ca3af]"
+                      }`}
                     >
-                      <Edit3 className="h-4 w-4" />
+                      <Settings className="h-4 w-4" />
                     </button>
                     <button
                       type="button"
