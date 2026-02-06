@@ -87,42 +87,62 @@ export default function DashboardOverview() {
       setIsIncidentLoading(true);
       try {
         const detailsUrl = `http://192.168.18.20:${port}/agent/serviceNow/incidentDetails`;
-        const detailsResponse = await fetch(detailsUrl, {
-          method: "POST",
-          headers: {
-            accept: "application/json",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ agent_id: String(agentId) }),
-          signal,
-        });
-        const detailsData = await detailsResponse.json();
-        console.log("ServiceNow incident details response:", {
-          ok: detailsResponse.ok,
-          status: detailsResponse.status,
-          data: detailsData,
-        });
+        const fetchWithRetry = async () => {
+          let lastError: unknown = null;
+          for (let attempt = 1; attempt <= 3; attempt += 1) {
+            if (signal?.aborted) {
+              throw new DOMException("Aborted", "AbortError");
+            }
+            try {
+              const response = await fetch(detailsUrl, {
+                method: "POST",
+                headers: {
+                  accept: "application/json",
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ agent_id: String(agentId) }),
+                signal,
+              });
+              const data = await response.json();
+              console.log("ServiceNow incident details response:", {
+                ok: response.ok,
+                status: response.status,
+                data,
+                attempt,
+              });
+              if (response.ok && Array.isArray(data?.incidents)) {
+                return data;
+              }
+              lastError = new Error("Invalid incident details response");
+            } catch (error) {
+              if (error instanceof DOMException && error.name === "AbortError") {
+                throw error;
+              }
+              lastError = error;
+            }
+            if (attempt < 3) {
+              await new Promise((resolve) => setTimeout(resolve, 600));
+            }
+          }
+          throw lastError ?? new Error("Incident details request failed");
+        };
 
-        if (detailsResponse.ok && Array.isArray(detailsData?.incidents)) {
-          const incidents = detailsData.incidents as { status?: string }[];
-          const open = incidents.filter(
-            (item) => String(item.status ?? "").toLowerCase() === "open"
-          ).length;
-          const closed = incidents.filter(
-            (item) => String(item.status ?? "").toLowerCase() === "closed"
-          ).length;
-          const total =
-            typeof detailsData?.total_incidents === "number"
-              ? detailsData.total_incidents
-              : incidents.length;
-          setIncidentCount(String(total));
-          setOpenCount(String(open));
-          setClosedCount(String(closed));
-        } else {
-          setOpenCount("--");
-          setClosedCount("--");
-          setIncidentCount("--");
-        }
+        const detailsData = await fetchWithRetry();
+
+        const incidents = detailsData.incidents as { status?: string }[];
+        const open = incidents.filter(
+          (item) => String(item.status ?? "").toLowerCase() === "open"
+        ).length;
+        const closed = incidents.filter(
+          (item) => String(item.status ?? "").toLowerCase() === "closed"
+        ).length;
+        const total =
+          typeof detailsData?.total_incidents === "number"
+            ? detailsData.total_incidents
+            : incidents.length;
+        setIncidentCount(String(total));
+        setOpenCount(String(open));
+        setClosedCount(String(closed));
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
           return;

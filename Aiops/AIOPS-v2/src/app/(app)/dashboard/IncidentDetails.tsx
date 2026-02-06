@@ -88,27 +88,49 @@ export default function IncidentDetails() {
         setIsServiceNowActive(true);
 
         const detailsUrl = `http://192.168.18.20:${serviceNowAgent.port}/agent/serviceNow/incidentDetails`;
-        const detailsResponse = await fetch(detailsUrl, {
-          method: "POST",
-          headers: {
-            accept: "application/json",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ agent_id: String(serviceNowAgent.agentId) }),
-          signal: options?.signal,
-        });
-        const detailsData = await detailsResponse.json();
+        const fetchWithRetry = async () => {
+          let lastError: unknown = null;
+          for (let attempt = 1; attempt <= 3; attempt += 1) {
+            if (options?.signal?.aborted) {
+              throw new DOMException("Aborted", "AbortError");
+            }
+            try {
+              const response = await fetch(detailsUrl, {
+                method: "POST",
+                headers: {
+                  accept: "application/json",
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  agent_id: String(serviceNowAgent.agentId),
+                }),
+                signal: options?.signal,
+              });
+              const data = await response.json();
+              if (response.ok && Array.isArray(data?.incidents)) {
+                return data;
+              }
+              lastError = new Error("Invalid incident details response");
+            } catch (err) {
+              if (err instanceof DOMException && err.name === "AbortError") {
+                throw err;
+              }
+              lastError = err;
+            }
+            if (attempt < 3) {
+              await new Promise((resolve) => setTimeout(resolve, 600));
+            }
+          }
+          throw lastError ?? new Error("Incident details request failed");
+        };
+
+        const detailsData = await fetchWithRetry();
 
         if (requestId !== requestIdRef.current) {
           return;
         }
 
-        if (detailsResponse.ok && Array.isArray(detailsData?.incidents)) {
-          setIncidents(detailsData.incidents as IncidentItem[]);
-        } else {
-          setIncidents([]);
-          setError("Unable to load incidents.");
-        }
+        setIncidents(detailsData.incidents as IncidentItem[]);
         setLastRefresh(new Date().toLocaleString());
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") {
