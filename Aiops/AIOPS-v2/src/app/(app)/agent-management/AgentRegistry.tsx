@@ -202,6 +202,38 @@ export default function AgentRegistry({
     ? AGENT_API_BASE_URL.slice(0, -1)
     : AGENT_API_BASE_URL;
 
+  const clearRulesetStorage = (
+    agentId: number | null | undefined,
+    appNames: Array<string | null | undefined>
+  ) => {
+    if (!agentId) {
+      return;
+    }
+    localStorage.removeItem(`agent-settings-application-${agentId}`);
+    localStorage.removeItem(`agent-settings-platform-${agentId}`);
+    const uniqueApps = Array.from(
+      new Set(appNames.filter((value): value is string => Boolean(value)))
+    );
+    uniqueApps.forEach((appName) => {
+      localStorage.removeItem(`agent-settings-ticket-${agentId}-${appName}`);
+      localStorage.removeItem(`agent-settings-frequency-${agentId}-${appName}`);
+      localStorage.removeItem(`agent-settings-status-${agentId}-${appName}`);
+      localStorage.removeItem(
+        `agent-settings-notifications-${agentId}-${appName}`
+      );
+    });
+  };
+
+  const handleCloseSettings = () => {
+    if (editTarget) {
+      clearRulesetStorage(editTarget.agentId, [
+        selectedApplication,
+        previousAppRef.current,
+      ]);
+    }
+    setEditTarget(null);
+  };
+
   const filteredAgents = useMemo(() => {
     const normalizedSearch = searchValue.trim().toLowerCase();
     const statusFiltered = filter === "all"
@@ -648,6 +680,10 @@ export default function AgentRegistry({
           "SUCCESS";
 
       if (isSuccess) {
+        clearRulesetStorage(editTarget.agentId, [
+          selectedApplication,
+          previousAppRef.current,
+        ]);
         setToastMessage("Ruleset Added Successfully");
         setIsToastVisible(true);
         setRulesetTab("view");
@@ -663,28 +699,6 @@ export default function AgentRegistry({
         setFrequencyOptions([]);
         setStatusOptions([]);
         setNotificationOptions([]);
-        if (editTarget) {
-          localStorage.removeItem(
-            `agent-settings-application-${editTarget.agentId}`
-          );
-          localStorage.removeItem(
-            `agent-settings-platform-${editTarget.agentId}`
-          );
-          if (previousAppRef.current) {
-            localStorage.removeItem(
-              `agent-settings-ticket-${editTarget.agentId}-${previousAppRef.current}`
-            );
-            localStorage.removeItem(
-              `agent-settings-frequency-${editTarget.agentId}-${previousAppRef.current}`
-            );
-            localStorage.removeItem(
-              `agent-settings-status-${editTarget.agentId}-${previousAppRef.current}`
-            );
-            localStorage.removeItem(
-              `agent-settings-notifications-${editTarget.agentId}-${previousAppRef.current}`
-            );
-          }
-        }
         previousAppRef.current = null;
         return;
       }
@@ -1068,7 +1082,7 @@ export default function AgentRegistry({
               <h4 className="text-lg font-semibold">Agent settings</h4>
               <button
                 type="button"
-                onClick={() => setEditTarget(null)}
+                onClick={handleCloseSettings}
                 className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-white"
               >
                 <X className="h-4 w-4" />
@@ -1575,7 +1589,7 @@ export default function AgentRegistry({
             <div className="flex items-center justify-end gap-3 border-t border-[#eef1f7] px-6 py-4">
               <button
                 type="button"
-                onClick={() => setEditTarget(null)}
+                onClick={handleCloseSettings}
                 className="rounded-xl border border-[#e5e7eb] px-5 py-2 text-sm font-semibold text-[#4f49e2]"
               >
                 Cancel
