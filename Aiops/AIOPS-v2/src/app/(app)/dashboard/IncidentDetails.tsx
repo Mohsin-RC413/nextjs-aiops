@@ -226,6 +226,17 @@ export default function IncidentDetails() {
     currentPage * ROWS_PER_PAGE
   );
 
+  const getStatusColorClass = (status: string) => {
+    const normalized = status.trim().toLowerCase();
+    if (normalized === "open") {
+      return "text-[#16a34a]";
+    }
+    if (normalized === "closed") {
+      return "text-[#ef4444]";
+    }
+    return "text-[#2b3341]";
+  };
+
   const renderTable = (expanded: boolean) => (
     <div className="mt-5 overflow-hidden rounded-2xl border border-[#eef1f7]">
       <div
@@ -258,7 +269,13 @@ export default function IncidentDetails() {
             <span>{row.state}</span>
             <span>{row.opened_at}</span>
             <span>{row.active}</span>
-            <span>{expanded ? row.priority : row.status}</span>
+            <span
+              className={
+                expanded ? undefined : getStatusColorClass(row.status ?? "")
+              }
+            >
+              {expanded ? row.priority : row.status}
+            </span>
             {expanded ? null : (
               <button
                 type="button"
