@@ -1,6 +1,14 @@
 "use client";
 
-import { Activity, Bell, Bot, RefreshCw, Sparkles } from "lucide-react";
+import {
+  Activity,
+  Bell,
+  Bot,
+  Maximize2,
+  Minimize2,
+  RefreshCw,
+  Sparkles,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { AGENT_API_BASE_URL, AGENT_ORG_KEY } from "@/config/agent";
@@ -113,6 +121,7 @@ export default function AgentActivityLog() {
   const [activeAgent, setActiveAgent] = useState<ActiveMuleAgent | null>(null);
   const [isLoadingAgents, setIsLoadingAgents] = useState(true);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
   const socketRef = useRef<WebSocket | null>(null);
   const queueRef = useRef<ActivityEntry[]>([]);
   const typingRef = useRef(false);
@@ -380,6 +389,104 @@ export default function AgentActivityLog() {
       }`
     : "Waiting for a running Mule agent";
 
+  const renderLogBody = () => (
+    <div className="mt-6 max-h-[520px] space-y-6 overflow-y-auto pr-2">
+      {entries.length === 0 && !activeAgent ? (
+        <div className="flex gap-4">
+          <div className="flex flex-col items-center">
+            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[#ecebff] text-[#5b4cf0]">
+              <Sparkles className="h-4 w-4" />
+            </div>
+            <div className="mt-2 h-full w-px bg-[#e6eaf3]" />
+          </div>
+          <div className="flex-1">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-[#111827]">
+                  Waiting for Mule logs
+                </p>
+                <p className="mt-1 text-sm text-[#5f677a]">
+                  Start a Mule agent to begin streaming activity logs.
+                </p>
+              </div>
+            </div>
+            <span className="mt-3 inline-flex items-center rounded-lg bg-[#eef2ff] px-2.5 py-1 text-xs font-semibold text-[#4338ca]">
+              info
+            </span>
+          </div>
+        </div>
+      ) : null}
+
+      {entries.length === 0 && activeAgent ? (
+        <div className="flex gap-4">
+          <div className="flex flex-col items-center">
+            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[#ecebff] text-[#5b4cf0]">
+              <Sparkles className="h-4 w-4" />
+            </div>
+            <div className="mt-2 h-full w-px bg-[#e6eaf3]" />
+          </div>
+          <div className="flex-1">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-[#111827]">
+                  Listening for logs
+                </p>
+                <p className="mt-1 text-sm text-[#5f677a]">
+                  {isConnecting
+                    ? "Connecting to live Mule logs..."
+                    : "No new activity yet."}
+                </p>
+              </div>
+              <div className="flex items-center gap-1 text-xs text-[#8a94a6]">
+                <Bell className="h-3.5 w-3.5" />
+                {isConnecting ? "Connecting" : "Just now"}
+              </div>
+            </div>
+            <span className="mt-3 inline-flex items-center rounded-lg bg-[#e8f0ff] px-2.5 py-1 text-xs font-semibold text-[#2563eb]">
+              running
+            </span>
+          </div>
+        </div>
+      ) : null}
+
+      {entries.map((entry) => (
+        <div key={entry.id} className="flex gap-4">
+          <div className="flex flex-col items-center">
+            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[#ecebff] text-[#5b4cf0]">
+              <Sparkles className="h-4 w-4" />
+            </div>
+            <div className="mt-2 h-full w-px bg-[#e6eaf3]" />
+          </div>
+          <div className="flex-1">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-[#111827]">
+                  <span className="inline-flex items-center gap-2">
+                    <Bot className="h-6 w-8 text-[#5b4cf0]" />
+                  </span>
+                </p>
+                <p className="mt-1 text-sm text-[#5f677a]">
+                  {entry.displayedDetail || entry.detail}
+                </p>
+              </div>
+              <div className="flex items-center gap-1 text-xs text-[#8a94a6]">
+                <Bell className="h-3.5 w-3.5" />
+                {entry.timeLabel}
+              </div>
+            </div>
+            <span
+              className={`mt-3 inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-semibold ${
+                activityTagStyles[entry.tag]
+              }`}
+            >
+              {entry.tag}
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <div className="rounded-3xl bg-white p-6 shadow-[0_18px_50px_-38px_rgba(16,24,40,0.5)]">
       <div className="flex items-start justify-between gap-4">
@@ -389,120 +496,73 @@ export default function AgentActivityLog() {
           </span>
           <div>
             <h3 className="text-lg font-semibold text-[#111827]">
-              Agent Activity Log
+              {activeAgent?.name ?? "MuleSoft Agent"}
             </h3>
-          <p className="mt-1 text-sm text-[#5b6476]">
-            {isLoadingAgents ? "Checking for Mule agent..." : headerText}
-          </p>
+            <p className="mt-1 text-sm text-[#5b6476]">
+              {isLoadingAgents ? "Checking for Mule agent..." : headerText}
+            </p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={handleRefresh}
-          className="mt-1 inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#e3e7f2] bg-white text-[#6b7280] shadow-[0_8px_16px_-14px_rgba(16,24,40,0.4)] transition hover:text-[#4f49e2]"
-          aria-label="Refresh logs"
-          title="Refresh logs"
-        >
-          <RefreshCw className="h-4 w-4" />
-        </button>
+        <div className="mt-1 inline-flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsMaximized(true)}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#e3e7f2] bg-white text-[#6b7280] shadow-[0_8px_16px_-14px_rgba(16,24,40,0.4)] transition hover:text-[#4f49e2]"
+            aria-label="Maximize logs"
+            title="Maximize logs"
+          >
+            <Maximize2 className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={handleRefresh}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#e3e7f2] bg-white text-[#6b7280] shadow-[0_8px_16px_-14px_rgba(16,24,40,0.4)] transition hover:text-[#4f49e2]"
+            aria-label="Refresh logs"
+            title="Refresh logs"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
-      <div className="mt-6 max-h-[520px] space-y-6 overflow-y-auto pr-2">
-        {entries.length === 0 && !activeAgent ? (
-          <div className="flex gap-4">
-            <div className="flex flex-col items-center">
-              <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[#ecebff] text-[#5b4cf0]">
-                <Sparkles className="h-4 w-4" />
-              </div>
-              <div className="mt-2 h-full w-px bg-[#e6eaf3]" />
-            </div>
-            <div className="flex-1">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm font-semibold text-[#111827]">
-                    Waiting for Mule logs
-                  </p>
-                  <p className="mt-1 text-sm text-[#5f677a]">
-                    Start a Mule agent to begin streaming activity logs.
-                  </p>
-                </div>
-              </div>
-              <span className="mt-3 inline-flex items-center rounded-lg bg-[#eef2ff] px-2.5 py-1 text-xs font-semibold text-[#4338ca]">
-                info
-              </span>
-            </div>
-          </div>
-        ) : null}
+      {renderLogBody()}
 
-        {entries.length === 0 && activeAgent ? (
-          <div className="flex gap-4">
-            <div className="flex flex-col items-center">
-              <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[#ecebff] text-[#5b4cf0]">
-                <Sparkles className="h-4 w-4" />
-              </div>
-              <div className="mt-2 h-full w-px bg-[#e6eaf3]" />
-            </div>
-            <div className="flex-1">
-              <div className="flex items-start justify-between gap-4">
+      {isMaximized ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-6">
+          <div className="flex h-[80vh] w-[80vw] flex-col rounded-3xl bg-white p-6 shadow-[0_24px_80px_-40px_rgba(15,23,42,0.7)]">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-2xl bg-[#e6f9ee] text-[#16a34a]">
+                  <Activity className="h-5 w-5" />
+                </span>
                 <div>
-                  <p className="text-sm font-semibold text-[#111827]">
-                    Listening for logs
+                  <h3 className="text-lg font-semibold text-[#111827]">
+                    {activeAgent?.name ?? "MuleSoft Agent"}
+                  </h3>
+                  <p className="mt-1 text-sm text-[#5b6476]">
+                    {isLoadingAgents ? "Checking for Mule agent..." : headerText}
                   </p>
-                  <p className="mt-1 text-sm text-[#5f677a]">
-                    {isConnecting
-                      ? "Connecting to live Mule logs..."
-                      : "No new activity yet."}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1 text-xs text-[#8a94a6]">
-                  <Bell className="h-3.5 w-3.5" />
-                  {isConnecting ? "Connecting" : "Just now"}
                 </div>
               </div>
-              <span className="mt-3 inline-flex items-center rounded-lg bg-[#e8f0ff] px-2.5 py-1 text-xs font-semibold text-[#2563eb]">
-                running
-              </span>
-            </div>
-          </div>
-        ) : null}
-
-        {entries.map((entry, index) => (
-          <div key={entry.id} className="flex gap-4">
-            <div className="flex flex-col items-center">
-              <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[#ecebff] text-[#5b4cf0]">
-                <Sparkles className="h-4 w-4" />
-              </div>
-              <div className="mt-2 h-full w-px bg-[#e6eaf3]" />
-            </div>
-            <div className="flex-1">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm font-semibold text-[#111827]">
-                    <span className="inline-flex items-center gap-2">
-                      <Bot className="h-6 w-8 text-[#5b4cf0]" />
-                    
-                    </span>
-                  </p>
-                  <p className="mt-1 text-sm text-[#5f677a]">
-                    {entry.displayedDetail || entry.detail}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1 text-xs text-[#8a94a6]">
-                  <Bell className="h-3.5 w-3.5" />
-                  {entry.timeLabel}
-                </div>
-              </div>
-              <span
-                className={`mt-3 inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-semibold ${
-                  activityTagStyles[entry.tag]
-                }`}
+              <button
+                type="button"
+                onClick={() => setIsMaximized(false)}
+                className="mt-1 inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#e3e7f2] bg-white text-[#6b7280] shadow-[0_8px_16px_-14px_rgba(16,24,40,0.4)] transition hover:text-[#4f49e2]"
+                aria-label="Minimize logs"
+                title="Minimize logs"
               >
-                {entry.tag}
-              </span>
+                <Minimize2 className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <div className="h-full overflow-y-auto pr-2">
+                <div className="h-0" />
+                {renderLogBody()}
+              </div>
             </div>
           </div>
-        ))}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }

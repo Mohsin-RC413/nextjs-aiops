@@ -326,21 +326,17 @@ export default function AgentManagementSection() {
     setChatError("");
 
     try {
-      const controller = new AbortController();
-      const timeoutId = window.setTimeout(() => controller.abort(), 15000);
       const response = await fetch(url, {
         method: "POST",
         headers: {
           accept: "application/json",
           "Content-Type": "application/json",
         },
-        signal: controller.signal,
         body: JSON.stringify({
           message: trimmed,
           agent_id: String(agentId),
         }),
       });
-      window.clearTimeout(timeoutId);
       const contentType = response.headers.get("content-type") || "";
       const rawText = await response.text();
       let data: unknown = rawText;
@@ -375,14 +371,10 @@ export default function AgentManagementSection() {
         time: formatTime(),
       });
     } catch (error) {
-      const errorMessage =
-        error instanceof DOMException && error.name === "AbortError"
-          ? "Request timed out. Please try again."
-          : "Unable to reach agent right now. Please check the agent connection.";
       appendMessage(chatKey, {
         id: `${chatKey}-agent-error-${Date.now()}`,
         role: "agent",
-        text: errorMessage,
+        text: "Unable to reach agent right now. Please check the agent connection.",
         time: formatTime(),
       });
     } finally {
@@ -485,6 +477,8 @@ export default function AgentManagementSection() {
         ) : (
           filteredAgents.map((agent) => {
             const isRunning = agent.status?.toUpperCase() === "STARTED";
+            const isMule =
+              (agent.enterprise ?? "").trim().toLowerCase() === "mule";
             const runningAt = agent.port
               ? agent.port.toString()
               : "Agent Not Started";
@@ -547,8 +541,12 @@ export default function AgentManagementSection() {
                   </button>
                   <button
                     type="button"
-                    disabled
-                    className="flex items-center justify-center gap-2 rounded-xl border border-[#e1e5ef] px-4 py-2 text-sm font-medium text-[#3a4355] opacity-60 cursor-not-allowed bg-[#f9fafb]"
+                    disabled={!isMule}
+                    className={`flex items-center justify-center gap-2 rounded-xl border border-[#e1e5ef] px-4 py-2 text-sm font-medium text-[#3a4355] ${
+                      isMule
+                        ? "bg-white hover:bg-[#f3f4f6]"
+                        : "bg-[#f9fafb] opacity-60 cursor-not-allowed"
+                    }`}
                   >
                     View Logs
                     <Eye className="h-4 w-4" />
@@ -655,6 +653,8 @@ export default function AgentManagementSection() {
                 <div className="grid gap-4 md:grid-cols-2">
                   {filteredAgents.map((agent) => {
                     const isRunning = agent.status?.toUpperCase() === "STARTED";
+                    const isMule =
+                      (agent.enterprise ?? "").trim().toLowerCase() === "mule";
                     const runningAt = agent.port
                       ? agent.port.toString()
                       : "Agent Not Started";
@@ -719,8 +719,12 @@ export default function AgentManagementSection() {
                           </button>
                           <button
                             type="button"
-                            disabled
-                            className="flex items-center justify-center gap-2 rounded-xl border border-[#e1e5ef] bg-[#f9fafb] px-4 py-2 text-sm font-medium text-[#3a4355] opacity-60"
+                            disabled={!isMule}
+                            className={`flex items-center justify-center gap-2 rounded-xl border border-[#e1e5ef] px-4 py-2 text-sm font-medium text-[#3a4355] ${
+                              isMule
+                                ? "bg-white hover:bg-[#f3f4f6]"
+                                : "bg-[#f9fafb] opacity-60 cursor-not-allowed"
+                            }`}
                           >
                             View Logs
                             <Eye className="h-4 w-4" />
