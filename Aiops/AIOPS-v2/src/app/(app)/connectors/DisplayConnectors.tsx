@@ -13,6 +13,22 @@ type ConnectorItem = {
   updated_at: string;
 };
 
+const providerLogoMap: Record<string, string> = {
+  ServiceNow: "/img/ServiceNow.png",
+  Mule: "/img/Mule.png",
+  Teams: "/img/Teams.webp",
+  MQ: "/img/MQ.png",
+  SAP: "/img/SAP.png",
+  SalesForce: "/img/SalesForce.png",
+  "MainFrame 400": "/img/MainFrame 400.png",
+  Jira: "/img/Jira.jfif",
+  Slack: "/img/Slack.png",
+  Zoom: "/img/Zoom.png",
+  Zendesk: "/img/Zendesk.png",
+  Exchange: "/img/Exchange.png",
+  Gmail: "/img/Gmail.png",
+};
+
 const formatDateTime = (value: string) => {
   const date = new Date(value.replace(" ", "T"));
   if (Number.isNaN(date.getTime())) {
@@ -27,7 +43,11 @@ const formatDateTime = (value: string) => {
   };
 };
 
-export default function DisplayConnectors() {
+type DisplayConnectorsProps = {
+  refreshKey?: number;
+};
+
+export default function DisplayConnectors({ refreshKey }: DisplayConnectorsProps) {
   const [connectors, setConnectors] = useState<ConnectorItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
@@ -79,11 +99,12 @@ export default function DisplayConnectors() {
     };
 
     loadConnectors();
+
     return () => {
       isMounted = false;
       controller.abort();
     };
-  }, [connectorsUrl]);
+  }, [connectorsUrl, refreshKey]);
 
   if (isLoading) {
     return (
@@ -121,7 +142,9 @@ export default function DisplayConnectors() {
     <div className="mt-6 grid gap-6 lg:grid-cols-3">
       {connectors.map((connector) => {
         const isActive = String(connector.is_active).toUpperCase() === "Y";
-        const { date, time } = formatDateTime(connector.created_at);
+        const created = formatDateTime(connector.created_at);
+        const updated = formatDateTime(connector.updated_at);
+        const logoSrc = providerLogoMap[connector.provider_code] ?? "";
         return (
           <div
             key={connector.id}
@@ -130,12 +153,25 @@ export default function DisplayConnectors() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-base font-semibold text-[#111827]">
-                  {connector.provider_code} Agent
+                  {connector.provider_code}
                 </p>
-                <p className="mt-3 text-sm text-[#5b6476]">Date: {date}</p>
-                <p className="mt-2 text-sm text-[#5b6476]">Time: {time}</p>
+                <p className="mt-3 text-sm text-[#5b6476]">
+                  Created: {created.date} {created.time}
+                </p>
+                <p className="mt-2 text-sm text-[#5b6476]">
+                  Updated: {updated.date} {updated.time}
+                </p>
               </div>
-              <span className="h-8 w-8" aria-hidden="true" />
+              {logoSrc ? (
+                <img
+                  src={logoSrc}
+                  alt={`${connector.provider_code} logo`}
+                  className="h-8 w-16 object-contain"
+                  loading="lazy"
+                />
+              ) : (
+                <span className="h-8 w-8" aria-hidden="true" />
+              )}
             </div>
 
             <div className="mt-6 flex items-center gap-4">

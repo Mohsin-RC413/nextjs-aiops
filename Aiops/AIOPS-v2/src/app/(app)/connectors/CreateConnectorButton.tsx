@@ -2,11 +2,22 @@
 
 import { ChevronDown, Plus, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AGENT_API_BASE_URL, AGENT_ORG_KEY } from "@/config/agent";
+import {
+  AGENT_API_BASE_URL,
+  AGENT_CONNECTORS_BASE_URL,
+  AGENT_ORG_KEY,
+} from "@/config/agent";
 
 type AgentTypeOption = {
   code: string;
   name: string;
+};
+
+type ConnectorSchemaField = {
+  field: string;
+  type: string;
+  label: string;
+  value?: string;
 };
 
 type SelectOption = { value: string; label: string };
@@ -109,19 +120,34 @@ function RoundedSelect({
   );
 }
 
-export default function CreateConnectorButton() {
+type CreateConnectorButtonProps = {
+  onCreated?: () => void;
+};
+
+export default function CreateConnectorButton({
+  onCreated,
+}: CreateConnectorButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [agentTypes, setAgentTypes] = useState<SelectOption[]>([]);
   const [enterpriseOptions, setEnterpriseOptions] = useState<SelectOption[]>([]);
   const [selectedAgentType, setSelectedAgentType] = useState("");
   const [selectedEnterprise, setSelectedEnterprise] = useState("");
+  const [schemaFields, setSchemaFields] = useState<ConnectorSchemaField[]>([]);
+  const [step, setStep] = useState<"select" | "schema">("select");
   const [isAgentTypesLoading, setIsAgentTypesLoading] = useState(false);
   const [isEnterpriseLoading, setIsEnterpriseLoading] = useState(false);
+  const [isSchemaLoading, setIsSchemaLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const [schemaError, setSchemaError] = useState("");
+  const [submitError, setSubmitError] = useState("");
 
   const apiBase = AGENT_API_BASE_URL.endsWith("/")
     ? AGENT_API_BASE_URL.slice(0, -1)
     : AGENT_API_BASE_URL;
+  const connectorsBase = AGENT_CONNECTORS_BASE_URL.endsWith("/")
+    ? AGENT_CONNECTORS_BASE_URL.slice(0, -1)
+    : AGENT_CONNECTORS_BASE_URL;
 
   const agentTypesUrl = useMemo(
     () => `${apiBase}/aiops/agent/types?orgKey=${encodeURIComponent(AGENT_ORG_KEY)}`,
@@ -182,6 +208,9 @@ export default function CreateConnectorButton() {
     if (!selectedAgentType) {
       setEnterpriseOptions([]);
       setSelectedEnterprise("");
+      setSchemaFields([]);
+      setStep("select");
+      localStorage.removeItem("connector-agent-type");
       localStorage.removeItem("connector-enterprise");
       return;
     }
@@ -245,6 +274,107 @@ export default function CreateConnectorButton() {
   }, [selectedEnterprise]);
 
   const canProceed = Boolean(selectedAgentType && selectedEnterprise);
+  const closeModal = () => {
+    setIsOpen(false);
+    setStep("select");
+    setSchemaFields([]);
+    setSchemaError("");
+    setSubmitError("");
+    setSelectedAgentType("");
+    setSelectedEnterprise("");
+    localStorage.removeItem("connector-agent-type");
+    localStorage.removeItem("connector-enterprise");
+  };
+
+  const handleLoadSchema = async () => {
+    if (!canProceed || isSchemaLoading) {
+      return;
+    }
+    setIsSchemaLoading(true);
+    setSchemaError("");
+    try {
+      const url = `${connectorsBase}/aiops/connectors/schemas?provider_code=${encodeURIComponent(
+        selectedEnterprise
+      )}`;
+      const response = await fetch(url, {
+        headers: {
+          accept: "application/json",
+          "X-Organization-Key": AGENT_ORG_KEY,
+        },
+      });
+      const data = await response.json();
+      if (response.ok && Array.isArray(data?.schema)) {
+        setSchemaFields(
+          (data.schema as ConnectorSchemaField[]).map((field) => ({
+            ...field,
+            value: field.value ?? "",
+          }))
+        );
+        setStep("schema");
+      } else {
+        setSchemaFields([]);
+        setSchemaError("Unable to load connector schema.");
+      }
+    } catch (error) {
+      setSchemaFields([]);
+      setSchemaError("Unable to load connector schema.");
+    } finally {
+      setIsSchemaLoading(false);
+    }
+  };
+
+  const handleSubmitConnector = async () => {
+    if (step !== "schema" || isSubmitting) {
+      return;
+    }
+    setIsSubmitting(true);
+    setSubmitError("");
+    try {
+      const url = `${connectorsBase}/aiops/connectors?orgKey=${encodeURIComponent(
+        AGENT_ORG_KEY
+      )}`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "Content-Type": "application/json",
+          "X-Organization-Key": AGENT_ORG_KEY,
+        },
+        body: JSON.stringify({
+          provider_code: selectedEnterprise,
+          schema: schemaFields.map((field) => ({
+            field: field.field,
+            type: field.type,
+            label: field.label,
+            value: field.value ?? "",
+          })),
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        const apiError =
+          typeof data === "object" && data
+            ? "detail" in data
+              ? String((data as { detail?: string }).detail ?? "")
+              : "message" in data
+                ? String((data as { message?: string }).message ?? "")
+                : ""
+            : "";
+        const sanitized = apiError
+          .replace(/^(.*?)(?:\s*[:\-]\s*)(\d{3})(?:\s*[-:]\s*.*)?$/, "$1")
+          .trim();
+        setSubmitError(sanitized || "Unable to create connector.");
+        return;
+      }
+
+      onCreated?.();
+      closeModal();
+    } catch (error) {
+      setSubmitError("Unable to create connector.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <>
@@ -264,7 +394,7 @@ export default function CreateConnectorButton() {
               <h3 className="text-lg font-semibold">Create Connectors</h3>
               <button
                 type="button"
-                onClick={() => setIsOpen(false)}
+                onClick={closeModal}
                 className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15"
               >
                 <X className="h-4 w-4" />
@@ -273,38 +403,78 @@ export default function CreateConnectorButton() {
 
             <div className="px-8 py-6">
               <div className="rounded-2xl border border-[#eef1f7] bg-white p-6 shadow-[0_12px_24px_-20px_rgba(15,23,42,0.15)]">
-                <div className="grid gap-6 md:grid-cols-2">
-                  <div className="text-sm font-semibold text-[#111827]">
-                    <span>Agent type</span>
-                    <div className="mt-2">
-                      <RoundedSelect
-                        value={selectedAgentType}
-                        options={agentTypes}
-                        placeholder="Select agent type"
-                        loading={isAgentTypesLoading}
-                        onChange={(value) => {
-                          setSelectedAgentType(value);
-                          setSelectedEnterprise("");
-                        }}
-                      />
+                {step === "select" ? (
+                  <div className="grid gap-6 md:grid-cols-2">
+                    <div className="text-sm font-semibold text-[#111827]">
+                      <span>Agent type</span>
+                      <div className="mt-2">
+                        <RoundedSelect
+                          value={selectedAgentType}
+                          options={agentTypes}
+                          placeholder="Select agent type"
+                          loading={isAgentTypesLoading}
+                          onChange={(value) => {
+                            setSelectedAgentType(value);
+                            setSelectedEnterprise("");
+                            setSchemaFields([]);
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div className="text-sm font-semibold text-[#111827]">
+                      <span>Enterprise</span>
+                      <div className="mt-2">
+                        <RoundedSelect
+                          value={selectedEnterprise}
+                          options={enterpriseOptions}
+                          placeholder="Select enterprise"
+                          disabled={!selectedAgentType}
+                          loading={isEnterpriseLoading}
+                          onChange={(value) => setSelectedEnterprise(value)}
+                        />
+                      </div>
                     </div>
                   </div>
-                  <div className="text-sm font-semibold text-[#111827]">
-                    <span>Enterprise</span>
-                    <div className="mt-2">
-                      <RoundedSelect
-                        value={selectedEnterprise}
-                        options={enterpriseOptions}
-                        placeholder="Select enterprise"
-                        disabled={!selectedAgentType}
-                        loading={isEnterpriseLoading}
-                        onChange={(value) => setSelectedEnterprise(value)}
-                      />
-                    </div>
+                ) : (
+                  <div className="grid gap-5 md:grid-cols-2">
+                    {schemaFields.map((field) => (
+                      <label
+                        key={field.field}
+                        className="text-sm font-semibold text-[#111827]"
+                      >
+                        <span>{field.label}</span>
+                        <input
+                          type={field.type === "password" ? "password" : "text"}
+                          value={field.value ?? ""}
+                          onChange={(event) => {
+                            const nextValue = event.target.value;
+                            setSchemaFields((prev) =>
+                              prev.map((item) =>
+                                item.field === field.field
+                                  ? { ...item, value: nextValue }
+                                  : item
+                              )
+                            );
+                          }}
+                          placeholder={`Enter ${field.label}`}
+                          className="mt-2 w-full rounded-xl border border-[#e0e5f0] bg-white px-4 py-2.5 text-sm text-[#111827] outline-none transition focus:border-[#4f49e2] focus:ring-2 focus:ring-[#4f49e2]/20"
+                        />
+                      </label>
+                    ))}
                   </div>
-                </div>
+                )}
                 {loadError ? (
                   <p className="mt-4 text-sm text-[#dc2626]">{loadError}</p>
+                ) : null}
+                {schemaError ? (
+                  <p className="mt-4 text-sm text-[#dc2626]">
+                    {schemaError}
+                  </p>
+                ) : null}
+                {submitError ? (
+                  <p className="mt-4 text-sm text-[#dc2626]">
+                    {submitError}
+                  </p>
                 ) : null}
               </div>
             </div>
@@ -312,20 +482,41 @@ export default function CreateConnectorButton() {
             <div className="flex items-center justify-between border-t border-[#eef1f7] px-8 py-4">
               <button
                 type="button"
+                onClick={() => {
+                  if (step === "schema") {
+                    setStep("select");
+                    return;
+                  }
+                }}
                 className="rounded-xl border border-[#e5e7eb] px-6 py-2 text-sm font-semibold text-[#4f49e2]"
               >
                 Prev
               </button>
               <button
                 type="button"
-                disabled={!canProceed}
+                onClick={step === "schema" ? handleSubmitConnector : handleLoadSchema}
+                disabled={
+                  step === "schema"
+                    ? isSubmitting
+                    : !canProceed || isSchemaLoading
+                }
                 className={`rounded-xl px-6 py-2 text-sm font-semibold text-white ${
-                  canProceed
+                  step === "schema"
+                    ? isSubmitting
+                      ? "cursor-not-allowed bg-[#c7c4f7]"
+                      : "bg-[#4f49e2] shadow-[0_10px_24px_-18px_rgba(79,73,226,0.9)]"
+                    : canProceed
                     ? "bg-[#4f49e2] shadow-[0_10px_24px_-18px_rgba(79,73,226,0.9)]"
                     : "cursor-not-allowed bg-[#c7c4f7]"
                 }`}
               >
-                Next
+                {step === "schema"
+                  ? isSubmitting
+                    ? "Submitting..."
+                    : "Submit"
+                  : isSchemaLoading
+                    ? "Loading..."
+                    : "Next"}
               </button>
             </div>
           </div>
