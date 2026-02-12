@@ -11,7 +11,7 @@ const AGENT_VALIDATE_URL = `${AGENT_API_BASE}/aiops/agent/validate`;
 const AGENT_TYPES_URL = `${AGENT_API_BASE}/aiops/agent/types`;
 const AGENT_SUBTYPES_URL = `${AGENT_API_BASE}/aiops/agent/subtypes`;
 const AGENT_ACTIONS_URL = `${AGENT_API_BASE}/aiops/agent/actions`;
-const AGENT_CREDENTIALS_URL = `${AGENT_API_BASE}/aiops/agent/credential-schema`;
+const AGENT_CREDENTIALS_URL = `${AGENT_API_BASE}/aiops/agent/connector-credentials`;
 const AGENT_CREATE_URL = `${AGENT_API_BASE}/aiops/agent/create`;
 
 type AgentType = { code: string; name: string };
@@ -156,6 +156,7 @@ export default function CreateNewAgent({ onCreateSuccess }: CreateNewAgentProps)
   >({});
   const [credentialsLoading, setCredentialsLoading] = useState(false);
   const [credentialsError, setCredentialsError] = useState("");
+  const [isConnectorMissing, setIsConnectorMissing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [submitSuccess, setSubmitSuccess] = useState("");
@@ -314,11 +315,19 @@ export default function CreateNewAgent({ onCreateSuccess }: CreateNewAgentProps)
   }, [isModalOpen, step, selectedAgentType]);
 
   useEffect(() => {
-    if (!isModalOpen || step !== 3 || !selectedEnterprise) {
+    if (!isModalOpen || step !== 3) {
       return;
     }
 
     const controller = new AbortController();
+    const storedEnterprise =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem("enterprise")
+        : null;
+    const enterpriseValue = selectedEnterprise || storedEnterprise || "";
+    if (!enterpriseValue) {
+      return () => controller.abort();
+    }
 
     const loadActions = async () => {
       setActionsLoading(true);
@@ -330,7 +339,7 @@ export default function CreateNewAgent({ onCreateSuccess }: CreateNewAgentProps)
 
       try {
         const url = `${AGENT_ACTIONS_URL}?subType=${encodeURIComponent(
-          selectedEnterprise
+          enterpriseValue
         )}&orgKey=${encodeURIComponent(AGENT_ORG_KEY)}`;
         const response = await fetch(url, {
           headers: { accept: "application/json" },
@@ -361,12 +370,13 @@ export default function CreateNewAgent({ onCreateSuccess }: CreateNewAgentProps)
     const loadCredentials = async () => {
       setCredentialsLoading(true);
       setCredentialsError("");
+      setIsConnectorMissing(false);
       setCredentialSchema([]);
       setCredentialValues({});
 
       try {
         const url = `${AGENT_CREDENTIALS_URL}?subType=${encodeURIComponent(
-          selectedEnterprise
+          enterpriseValue
         )}&orgKey=${encodeURIComponent(AGENT_ORG_KEY)}`;
         const response = await fetch(url, {
           headers: { accept: "application/json" },
@@ -386,6 +396,12 @@ export default function CreateNewAgent({ onCreateSuccess }: CreateNewAgentProps)
             initialValues[field.field] = field.value ?? "";
           });
           setCredentialValues(initialValues);
+        } else if (
+          typeof data?.detail === "string" &&
+          data.detail.toLowerCase().includes("connector not found")
+        ) {
+          setIsConnectorMissing(true);
+          setCredentialsError("Connector not found. Create connector first.");
         } else {
           setCredentialsError(
             data?.message || "Unable to load credential schema."
@@ -860,26 +876,25 @@ export default function CreateNewAgent({ onCreateSuccess }: CreateNewAgentProps)
                           {credentialsError}
                         </div>
                       ) : null}
-                      {credentialSchema.map((field) => (
-                        <label
-                          key={field.field}
-                          className="flex flex-col gap-2 text-sm font-semibold text-[#64748b]"
-                        >
-                          <span>{field.label}</span>
-                          <input
-                            type={field.type === "password" ? "password" : "text"}
-                            value={credentialValues[field.field] ?? ""}
-                            onChange={(event) =>
-                              setCredentialValues((prev) => ({
-                                ...prev,
-                                [field.field]: event.target.value,
-                              }))
-                            }
-                            placeholder={field.label}
-                            className="w-full rounded-xl border border-[#e5e7eb] bg-white px-4 py-3 text-sm text-[#111827] outline-none transition focus:border-[#4f49e2] focus:ring-2 focus:ring-[#4f49e2]/20"
-                          />
-                        </label>
-                      ))}
+                      {!isConnectorMissing
+                        ? credentialSchema.map((field) => (
+                            <label
+                              key={field.field}
+                              className="flex flex-col gap-2 text-sm font-semibold text-[#64748b]"
+                            >
+                              <span>{field.label}</span>
+                              <input
+                                type={
+                                  field.type === "password" ? "password" : "text"
+                                }
+                                value={credentialValues[field.field] ?? ""}
+                                readOnly
+                                placeholder={field.label}
+                                className="w-full rounded-xl border border-[#e5e7eb] bg-white px-4 py-3 text-sm text-[#111827] outline-none transition focus:border-[#4f49e2] focus:ring-2 focus:ring-[#4f49e2]/20"
+                              />
+                            </label>
+                          ))
+                        : null}
                     </div>
                   </div>
                 </div>
@@ -945,9 +960,9 @@ export default function CreateNewAgent({ onCreateSuccess }: CreateNewAgentProps)
                     <button
                       type="button"
                       onClick={handleCreateAgent}
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || isConnectorMissing}
                       className={`rounded-xl px-6 py-2.5 text-sm font-semibold text-white ${
-                        isSubmitting
+                        isSubmitting || isConnectorMissing
                           ? "cursor-not-allowed bg-[#a7a6f2]"
                           : "bg-[#4f49e2] shadow-[0_10px_24px_-18px_rgba(79,73,226,0.9)] hover:bg-[#433ccf]"
                       }`}
