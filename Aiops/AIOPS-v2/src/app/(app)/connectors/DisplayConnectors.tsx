@@ -45,9 +45,13 @@ const formatDateTime = (value: string) => {
 
 type DisplayConnectorsProps = {
   refreshKey?: number;
+  searchTerm?: string;
 };
 
-export default function DisplayConnectors({ refreshKey }: DisplayConnectorsProps) {
+export default function DisplayConnectors({
+  refreshKey,
+  searchTerm,
+}: DisplayConnectorsProps) {
   const [connectors, setConnectors] = useState<ConnectorItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
@@ -138,9 +142,34 @@ export default function DisplayConnectors({ refreshKey }: DisplayConnectorsProps
     );
   }
 
+  const normalizedSearch = (searchTerm ?? "").trim().toLowerCase();
+  const visibleConnectors = normalizedSearch
+    ? connectors.filter((connector) => {
+        const provider = connector.provider_code?.toLowerCase() ?? "";
+        const type = connector.connector_type?.toLowerCase() ?? "";
+        return provider.includes(normalizedSearch) || type.includes(normalizedSearch);
+      })
+    : connectors;
+
+  if (visibleConnectors.length === 0) {
+    return (
+      <div className="mt-6 rounded-2xl border border-[#e6eaf3] bg-white px-6 py-10 text-center">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#eef2ff] text-[#4f49e2]">
+          <Link2 className="h-6 w-6" />
+        </div>
+        <p className="mt-4 text-base font-semibold text-[#111827]">
+          No connectors found
+        </p>
+        <p className="mt-2 text-sm text-[#6b7280]">
+          Try a different search term.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="mt-6 grid gap-6 lg:grid-cols-3">
-      {connectors.map((connector) => {
+      {visibleConnectors.map((connector) => {
         const isActive = String(connector.is_active).toUpperCase() === "Y";
         const created = formatDateTime(connector.created_at);
         const updated = formatDateTime(connector.updated_at);
