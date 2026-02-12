@@ -1,6 +1,6 @@
 "use client";
 
-import { Link2, Pencil } from "lucide-react";
+import { Link2, Pencil, Plug } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AGENT_CONNECTORS_BASE_URL, AGENT_ORG_KEY } from "@/config/agent";
 
@@ -151,10 +151,15 @@ export default function DisplayConnectors({ refreshKey }: DisplayConnectorsProps
             className="rounded-2xl bg-white p-5 shadow-[0_12px_30px_-24px_rgba(16,24,40,0.35)] ring-1 ring-[#eef1f7]"
           >
             <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-base font-semibold text-[#111827]">
-                  {connector.provider_code}
-                </p>
+              <div className="flex-1">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#eef2ff] text-[#4f49e2]">
+                    <Plug className="h-4 w-4" />
+                  </span>
+                  <p className="text-lg font-semibold text-[#111827]">
+                    {connector.provider_code}
+                  </p>
+                </div>
                 <p className="mt-3 text-sm text-[#5b6476]">
                   Created: {created.date} {created.time}
                 </p>
