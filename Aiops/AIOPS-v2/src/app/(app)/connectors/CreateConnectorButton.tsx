@@ -402,39 +402,57 @@ export default function CreateConnectorButton({
             </div>
 
             <div className="px-8 py-6">
+              <div className="space-y-2">
+                <h4 className="text-xl font-semibold text-[#101828]">
+                  Connect your system
+                </h4>
+                <p className="text-sm text-[#6b7280]">
+                  {step === "schema" ? "Step 2 of 2" : "Step 1 of 2"}
+                </p>
+              </div>
               <div className="rounded-2xl border border-[#eef1f7] bg-white p-6 shadow-[0_12px_24px_-20px_rgba(15,23,42,0.15)]">
                 {step === "select" ? (
-                  <div className="grid gap-6 md:grid-cols-2">
-                    <div className="text-sm font-semibold text-[#111827]">
-                      <span>Agent type</span>
-                      <div className="mt-2">
-                        <RoundedSelect
-                          value={selectedAgentType}
-                          options={agentTypes}
-                          placeholder="Select agent type"
-                          loading={isAgentTypesLoading}
-                          onChange={(value) => {
-                            setSelectedAgentType(value);
-                            setSelectedEnterprise("");
-                            setSchemaFields([]);
-                          }}
-                        />
+                  <>
+                    <div className="mb-5">
+                      <h5 className="text-lg font-semibold text-[#111827]">
+                        Configure the connector experience
+                      </h5>
+                      <p className="mt-2 text-sm text-[#6b7280]">
+                        Pick the type and enterprise to connect.
+                      </p>
+                    </div>
+                    <div className="grid gap-6 md:grid-cols-2">
+                      <div className="text-sm font-semibold text-[#111827]">
+                        <span>Agent type</span>
+                        <div className="mt-2">
+                          <RoundedSelect
+                            value={selectedAgentType}
+                            options={agentTypes}
+                            placeholder="Select agent type"
+                            loading={isAgentTypesLoading}
+                            onChange={(value) => {
+                              setSelectedAgentType(value);
+                              setSelectedEnterprise("");
+                              setSchemaFields([]);
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <div className="text-sm font-semibold text-[#111827]">
+                        <span>Enterprise</span>
+                        <div className="mt-2">
+                          <RoundedSelect
+                            value={selectedEnterprise}
+                            options={enterpriseOptions}
+                            placeholder="Select enterprise"
+                            disabled={!selectedAgentType}
+                            loading={isEnterpriseLoading}
+                            onChange={(value) => setSelectedEnterprise(value)}
+                          />
+                        </div>
                       </div>
                     </div>
-                    <div className="text-sm font-semibold text-[#111827]">
-                      <span>Enterprise</span>
-                      <div className="mt-2">
-                        <RoundedSelect
-                          value={selectedEnterprise}
-                          options={enterpriseOptions}
-                          placeholder="Select enterprise"
-                          disabled={!selectedAgentType}
-                          loading={isEnterpriseLoading}
-                          onChange={(value) => setSelectedEnterprise(value)}
-                        />
-                      </div>
-                    </div>
-                  </div>
+                  </>
                 ) : (
                   <div className="grid gap-5 md:grid-cols-2">
                     {schemaFields.map((field) => (
