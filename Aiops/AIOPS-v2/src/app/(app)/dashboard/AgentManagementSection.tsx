@@ -1,6 +1,6 @@
 "use client";
 
-import { AGENT_API_BASE_URL, AGENT_ORG_KEY } from "@/config/agent";
+import { AGENT_API_BASE_URL, AGENT_HOST, AGENT_ORG_KEY } from "@/config/agent";
 import {
   Bot,
   Eye,
@@ -312,7 +312,7 @@ export default function AgentManagementSection() {
     const agentId = activeChatAgent.agentId;
     const chatKey = activeChatKey;
     const endpoint = resolveChatEndpoint(activeChatAgent);
-    const url = `http://192.168.18.20:${activeChatAgent.port}/agent/${endpoint}/chat`;
+    const url = `${AGENT_HOST}:${activeChatAgent.port}/agent/${endpoint}/chat`;
 
     const userMessage: ChatMessage = {
       id: `${chatKey}-user-${Date.now()}`,
