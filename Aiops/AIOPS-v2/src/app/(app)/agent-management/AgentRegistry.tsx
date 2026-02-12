@@ -14,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AGENT_API_BASE_URL } from "@/config/agent";
+import { AGENT_API_BASE_URL, AGENT_HOST } from "@/config/agent";
 
 type AgentRecord = {
   agentId: number;
@@ -321,7 +321,7 @@ export default function AgentRegistry({
       setRulesetListLoading(true);
       setRulesetListError("");
       try {
-        const url = `http://192.168.18.20:${editTarget.port}/agent/mule/ruleset/list/${editTarget.agentId}`;
+        const url = `${AGENT_HOST}:${editTarget.port}/agent/mule/ruleset/list/${editTarget.agentId}`;
         const response = await fetch(url, {
           headers: { accept: "application/json" },
           signal: controller.signal,
@@ -373,7 +373,7 @@ export default function AgentRegistry({
       setIsPlatformLoading(true);
       setRulesetError("");
       try {
-        const url = `http://192.168.18.20:${editTarget.port}/agent/mule/dropdown/target-types`;
+        const url = `${AGENT_HOST}:${editTarget.port}/agent/mule/dropdown/target-types`;
         const response = await fetch(url, {
           method: "POST",
           headers: {
@@ -422,7 +422,7 @@ export default function AgentRegistry({
       setIsApplicationLoading(true);
       setRulesetError("");
       try {
-        const url = `http://192.168.18.20:${editTarget.port}/agent/mule/dropdown/targets`;
+        const url = `${AGENT_HOST}:${editTarget.port}/agent/mule/dropdown/targets`;
         const response = await fetch(url, {
           method: "POST",
           headers: {
@@ -484,10 +484,10 @@ export default function AgentRegistry({
       setIsNotificationLoading(true);
       setRulesetError("");
       try {
-        const statusUrl = `http://192.168.18.20:${editTarget.port}/agent/mule/dropdown/status`;
-        const ticketUrl = `http://192.168.18.20:${editTarget.port}/agent/mule/dropdown/ticket`;
-        const frequencyUrl = `http://192.168.18.20:${editTarget.port}/agent/mule/dropdown/frequency`;
-        const notificationsUrl = `http://192.168.18.20:${editTarget.port}/agent/mule/dropdown/notifications`;
+        const statusUrl = `${AGENT_HOST}:${editTarget.port}/agent/mule/dropdown/status`;
+        const ticketUrl = `${AGENT_HOST}:${editTarget.port}/agent/mule/dropdown/ticket`;
+        const frequencyUrl = `${AGENT_HOST}:${editTarget.port}/agent/mule/dropdown/frequency`;
+        const notificationsUrl = `${AGENT_HOST}:${editTarget.port}/agent/mule/dropdown/notifications`;
         const body = JSON.stringify({
           agent_id: String(editTarget.agentId),
           app_name: selectedApplication,
@@ -636,7 +636,7 @@ export default function AgentRegistry({
     setRulesetError("");
 
     try {
-      const url = `http://192.168.18.20:${editTarget.port}/agent/mule/ruleset/save`;
+      const url = `${AGENT_HOST}:${editTarget.port}/agent/mule/ruleset/save`;
       const payload = {
         agent_id: String(editTarget.agentId),
         target_type: selectedPlatform,
@@ -730,7 +730,7 @@ export default function AgentRegistry({
     setRulesetError("");
 
     try {
-      const url = `http://192.168.18.20:${editTarget.port}/agent/mule/ruleset/delete`;
+      const url = `${AGENT_HOST}:${editTarget.port}/agent/mule/ruleset/delete`;
       const payload = {
         agent_id: String(editTarget.agentId),
         ruleset_id: String(deleteRulesetTarget.ruleset_id),

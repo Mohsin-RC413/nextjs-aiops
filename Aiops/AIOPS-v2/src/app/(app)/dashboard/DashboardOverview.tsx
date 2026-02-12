@@ -1,6 +1,6 @@
 "use client";
 
-import { AGENT_API_BASE_URL, AGENT_ORG_KEY } from "@/config/agent";
+import { AGENT_API_BASE_URL, AGENT_HOST, AGENT_ORG_KEY } from "@/config/agent";
 import {
   CheckCircle2,
   Loader2,
@@ -86,7 +86,7 @@ export default function DashboardOverview() {
       setIsDetailsLoading(true);
       setIsIncidentLoading(true);
       try {
-        const detailsUrl = `http://192.168.18.20:${port}/agent/serviceNow/incidentDetails`;
+        const detailsUrl = `${AGENT_HOST}:${port}/agent/serviceNow/incidentDetails`;
         const fetchWithRetry = async () => {
           let lastError: unknown = null;
           for (let attempt = 1; attempt <= 3; attempt += 1) {

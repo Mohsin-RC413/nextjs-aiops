@@ -1,6 +1,6 @@
 "use client";
 
-import { AGENT_API_BASE_URL, AGENT_ORG_KEY } from "@/config/agent";
+import { AGENT_API_BASE_URL, AGENT_HOST, AGENT_ORG_KEY } from "@/config/agent";
 import {
   ChevronLeft,
   ChevronRight,
@@ -87,7 +87,7 @@ export default function IncidentDetails() {
 
         setIsServiceNowActive(true);
 
-        const detailsUrl = `http://192.168.18.20:${serviceNowAgent.port}/agent/serviceNow/incidentDetails`;
+        const detailsUrl = `${AGENT_HOST}:${serviceNowAgent.port}/agent/serviceNow/incidentDetails`;
         const fetchWithRetry = async () => {
           let lastError: unknown = null;
           for (let attempt = 1; attempt <= 3; attempt += 1) {

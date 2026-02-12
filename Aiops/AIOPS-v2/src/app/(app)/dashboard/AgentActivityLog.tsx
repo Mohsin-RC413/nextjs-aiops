@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { AGENT_API_BASE_URL, AGENT_ORG_KEY } from "@/config/agent";
+import { AGENT_API_BASE_URL, AGENT_ORG_KEY, AGENT_WS_HOST } from "@/config/agent";
 
 type ActivityEntry = {
   id: string;
@@ -36,7 +36,7 @@ const activityTagStyles: Record<ActivityEntry["tag"], string> = {
   info: "bg-[#eef2ff] text-[#4338ca]",
 };
 
-const LOG_SOCKET_HOST = "ws://192.168.18.20";
+const LOG_SOCKET_HOST = AGENT_WS_HOST;
 const MAX_LOG_ENTRIES = 200;
 const MESSAGE_DELAY_MS = 250;
 const TYPE_SPEED_MS = 12;
