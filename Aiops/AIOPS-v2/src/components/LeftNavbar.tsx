@@ -99,13 +99,7 @@ const navSections: NavSection[] = [
         id: "operations-connectors",
         icon: <Link2 className="h-5 w-5" />,
         dot: true,
-        href: "#",
-      },
-      {
-        label: "AIOps connectors",
-        id: "operations-aiops-connectors",
-        icon: <Truck className="h-5 w-5" />,
-        href: "#",
+        href: "/connectors",
       },
       {
         label: "User management",
