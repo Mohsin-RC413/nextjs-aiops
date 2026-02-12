@@ -860,9 +860,6 @@ export default function CreateNewAgent({ onCreateSuccess }: CreateNewAgentProps)
                   <div className="mt-6">
                     <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.2em] text-[#94a3b8]">
                       <span>Credentials</span>
-                      <span className="normal-case text-[#94a3b8]">
-                        Populated from backend schema
-                      </span>
                     </div>
 
                     <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -872,7 +869,7 @@ export default function CreateNewAgent({ onCreateSuccess }: CreateNewAgentProps)
                         </div>
                       ) : null}
                       {credentialsError ? (
-                        <div className="col-span-full text-sm text-[#dc2626]">
+                        <div className="col-span-full text-center text-sm text-[#dc2626]">
                           {credentialsError}
                         </div>
                       ) : null}

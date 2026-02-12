@@ -171,7 +171,7 @@ export default function DisplayConnectors({ refreshKey }: DisplayConnectorsProps
                 <img
                   src={logoSrc}
                   alt={`${connector.provider_code} logo`}
-                  className="h-8 w-16 object-contain"
+                  className="h-12 w-20 object-contain"
                   loading="lazy"
                 />
               ) : (
