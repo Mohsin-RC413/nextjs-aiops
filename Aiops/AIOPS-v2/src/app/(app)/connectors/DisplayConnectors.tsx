@@ -218,6 +218,8 @@ export default function DisplayConnectors({
     );
   }
 
+  const showAddCard = visibleConnectors.length < 3;
+
   return (
     <div className="mt-6 grid gap-6 lg:grid-cols-3">
       {visibleConnectors.map((connector) => {
@@ -231,6 +233,12 @@ export default function DisplayConnectors({
               connector.provider_code.trim().toLowerCase()
         );
         const isDeleteDisabled = isAgentExists || deletingId === connector.id;
+        const activeClass = isActive
+          ? "bg-[#158a00] text-white"
+          : "bg-[#e8f5e1] text-[#158a00] border border-[#cfe9c1]";
+        const inactiveClass = isActive
+          ? "bg-[#f3f4f6] text-[#9ca3af] border border-[#e5e7eb]"
+          : "bg-[#ff2d2d] text-white";
         return (
           <div
             key={connector.id}
@@ -242,14 +250,14 @@ export default function DisplayConnectors({
                   <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#eef2ff] text-[#4f49e2]">
                     <Plug className="h-4 w-4" />
                   </span>
-                  <p className="text-lg font-semibold text-[#111827]">
+                  <p className="text-xl font-semibold text-[#111827]">
                     {connector.provider_code}
                   </p>
                 </div>
-                <p className="mt-3 text-sm text-[#5b6476]">
+                <p className="mt-3 text-sm leading-5 text-[#6b7280]">
                   Created: {created.date} {created.time}
                 </p>
-                <p className="mt-2 text-sm text-[#5b6476]">
+                <p className="mt-1.5 text-sm leading-5 text-[#6b7280]">
                   Updated: {updated.date} {updated.time}
                 </p>
               </div>
@@ -257,67 +265,76 @@ export default function DisplayConnectors({
                 <img
                   src={logoSrc}
                   alt={`${connector.provider_code} logo`}
-                  className="h-12 w-20 object-contain"
+                  className="h-12 w-24 object-contain"
                   loading="lazy"
                 />
               ) : (
-                <span className="h-8 w-8" aria-hidden="true" />
+                <span className="h-10 w-16" aria-hidden="true" />
               )}
             </div>
 
             <div className="mt-6 flex items-center gap-4">
-              <span
-                className={`flex-1 rounded-lg py-2 text-center text-sm font-semibold ${
-                  isActive
-                    ? "bg-[#158a00] text-white"
-                    : "bg-[#e7f3e2] text-[#148a3b]"
-                }`}
-              >
-                Active
-              </span>
-              <span
-                className={`flex-1 rounded-lg py-2 text-center text-sm font-semibold ${
-                  isActive
-                    ? "bg-[#ffe8ea] text-[#ff3344]"
-                    : "bg-[#ff2d2d] text-white"
-                }`}
-              >
-                Inactive
-              </span>
-              <button
-                type="button"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#cbd2ff] text-[#4f49e2]"
-                aria-label={`Edit ${connector.provider_code} connector`}
-              >
-                <Pencil className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (isDeleteDisabled) {
-                    return;
+              <div className="flex flex-1 items-center gap-3">
+                <span
+                  className={`flex-1 rounded-lg py-2 text-center text-sm font-semibold ${activeClass}`}
+                >
+                  Active
+                </span>
+                <span
+                  className={`flex-1 rounded-lg py-2 text-center text-sm font-semibold ${inactiveClass}`}
+                >
+                  Inactive
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#cbd2ff] text-[#4f49e2] transition hover:bg-[#eef2ff]"
+                  aria-label={`Edit ${connector.provider_code} connector`}
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isDeleteDisabled) {
+                      return;
+                    }
+                    setDeleteTarget(connector);
+                  }}
+                  disabled={isDeleteDisabled}
+                  className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border transition ${
+                    isDeleteDisabled
+                      ? "cursor-not-allowed border-[#e5e7eb] text-[#9ca3af]"
+                      : "border-[#fecaca] text-[#ef4444] hover:bg-[#fee2e2]"
+                  }`}
+                  aria-label={`Delete ${connector.provider_code} connector`}
+                  title={
+                    isAgentExists
+                      ? "Delete the agent before deleting this connector."
+                      : "Delete connector"
                   }
-                  setDeleteTarget(connector);
-                }}
-                disabled={isDeleteDisabled}
-                className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border ${
-                  isDeleteDisabled
-                    ? "cursor-not-allowed border-[#e5e7eb] text-[#9ca3af]"
-                    : "border-[#fecaca] text-[#ef4444] hover:bg-[#fee2e2]"
-                }`}
-                aria-label={`Delete ${connector.provider_code} connector`}
-                title={
-                  isAgentExists
-                    ? "Delete the agent before deleting this connector."
-                    : "Delete connector"
-                }
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           </div>
         );
       })}
+      {showAddCard ? (
+        <div className="rounded-2xl border border-dashed border-[#d6dcea] bg-[#f8fafc] p-6 text-center text-sm text-[#6b7280]">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#eef2ff] text-[#4f49e2]">
+            <Link2 className="h-5 w-5" />
+          </div>
+          <p className="mt-4 text-base font-semibold text-[#111827]">
+            Add another connector
+          </p>
+          <p className="mt-1 text-sm text-[#6b7280]">
+            Connect more systems to expand coverage.
+          </p>
+        </div>
+      ) : null}
 
       {deleteTarget ? (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/35 px-4 py-8">
