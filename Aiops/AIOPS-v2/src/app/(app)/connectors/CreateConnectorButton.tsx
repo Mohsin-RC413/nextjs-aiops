@@ -1,12 +1,12 @@
 "use client";
 
-import { ChevronDown, Plus, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AGENT_API_BASE_URL,
   AGENT_CONNECTORS_BASE_URL,
   AGENT_ORG_KEY,
 } from "@/config/agent";
+import { ChevronDown, Plus, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type AgentTypeOption = {
   code: string;
@@ -122,10 +122,12 @@ function RoundedSelect({
 
 type CreateConnectorButtonProps = {
   onCreated?: () => void;
+  renderTrigger?: (props: { open: () => void }) => React.ReactNode;
 };
 
 export default function CreateConnectorButton({
   onCreated,
+  renderTrigger,
 }: CreateConnectorButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [agentTypes, setAgentTypes] = useState<SelectOption[]>([]);
@@ -376,16 +378,22 @@ export default function CreateConnectorButton({
     }
   };
 
+  const openModal = () => setIsOpen(true);
+
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        className="inline-flex items-center gap-2 rounded-xl bg-[#4f49e2] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_24px_-16px_rgba(79,73,226,0.65)]"
-      >
-        <Plus className="h-4 w-4" />
-        Create Connectors
-      </button>
+      {renderTrigger ? (
+        renderTrigger({ open: openModal })
+      ) : (
+        <button
+          type="button"
+          onClick={openModal}
+          className="inline-flex items-center gap-2 rounded-xl bg-[#4f49e2] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_24px_-16px_rgba(79,73,226,0.65)]"
+        >
+          <Plus className="h-4 w-4" />
+          Create Connector
+        </button>
+      )}
 
       {isOpen ? (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 px-4 py-8">

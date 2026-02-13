@@ -61,11 +61,13 @@ const formatDateTime = (value: string) => {
 type DisplayConnectorsProps = {
   refreshKey?: number;
   searchTerm?: string;
+  onAddConnector?: () => void;
 };
 
 export default function DisplayConnectors({
   refreshKey,
   searchTerm,
+  onAddConnector,
 }: DisplayConnectorsProps) {
   const [connectors, setConnectors] = useState<ConnectorItem[]>([]);
   const [agents, setAgents] = useState<AgentRecord[]>([]);
@@ -323,7 +325,11 @@ export default function DisplayConnectors({
         );
       })}
       {showAddCard ? (
-        <div className="rounded-2xl border border-dashed border-[#d6dcea] bg-[#f8fafc] p-6 text-center text-sm text-[#6b7280]">
+        <button
+          type="button"
+          onClick={onAddConnector}
+          className="rounded-2xl border border-dashed border-[#d6dcea] bg-[#f8fafc] p-6 text-center text-sm text-[#6b7280] transition hover:border-[#c7d2fe] hover:bg-[#f3f6ff]"
+        >
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#eef2ff] text-[#4f49e2]">
             <Link2 className="h-5 w-5" />
           </div>
@@ -333,7 +339,7 @@ export default function DisplayConnectors({
           <p className="mt-1 text-sm text-[#6b7280]">
             Connect more systems to expand coverage.
           </p>
-        </div>
+        </button>
       ) : null}
 
       {deleteTarget ? (

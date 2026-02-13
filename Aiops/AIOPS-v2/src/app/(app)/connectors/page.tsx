@@ -43,7 +43,16 @@ export default function ConnectorsPage() {
           />
         </div>
       </div>
-      <DisplayConnectors refreshKey={refreshKey} searchTerm={searchValue} />
+      <CreateConnectorButton
+        onCreated={() => setRefreshKey((prev) => prev + 1)}
+        renderTrigger={({ open }) => (
+          <DisplayConnectors
+            refreshKey={refreshKey}
+            searchTerm={searchValue}
+            onAddConnector={open}
+          />
+        )}
+      />
     </section>
   );
 }
