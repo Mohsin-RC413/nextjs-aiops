@@ -162,11 +162,14 @@ export default function CreateNewAgent({ onCreateSuccess }: CreateNewAgentProps)
   const [submitSuccess, setSubmitSuccess] = useState("");
   const [toastMessage, setToastMessage] = useState("");
   const [isToastVisible, setIsToastVisible] = useState(false);
+  const stepContentRef = useRef<HTMLDivElement | null>(null);
 
   const trimmedAgentName = agentName.trim();
   const isNextDisabled = trimmedAgentName.length === 0 || isValidating;
   const isStepTwoNextDisabled =
     selectedAgentType.length === 0 || selectedEnterprise.length === 0;
+  const isStepThreeSubmitDisabled =
+    isSubmitting || isConnectorMissing || selectedActions.length === 0;
 
   useEffect(() => {
     if (!isToastVisible) {
@@ -317,6 +320,10 @@ export default function CreateNewAgent({ onCreateSuccess }: CreateNewAgentProps)
   useEffect(() => {
     if (!isModalOpen || step !== 3) {
       return;
+    }
+    const scrollTarget = stepContentRef.current;
+    if (scrollTarget) {
+      scrollTarget.scrollTo({ top: 160, behavior: "smooth" });
     }
 
     const controller = new AbortController();
@@ -590,7 +597,10 @@ export default function CreateNewAgent({ onCreateSuccess }: CreateNewAgentProps)
             </div>
 
             <div className="flex min-h-0 flex-1 flex-col">
-              <div className="flex-1 overflow-y-auto px-8 py-7">
+              <div
+                ref={stepContentRef}
+                className="flex-1 overflow-y-auto px-8 py-7"
+              >
                 {step === 1 ? (
                   <div>
                 <div className="space-y-2">
@@ -957,9 +967,9 @@ export default function CreateNewAgent({ onCreateSuccess }: CreateNewAgentProps)
                     <button
                       type="button"
                       onClick={handleCreateAgent}
-                      disabled={isSubmitting || isConnectorMissing}
+                      disabled={isStepThreeSubmitDisabled}
                       className={`rounded-xl px-6 py-2.5 text-sm font-semibold text-white ${
-                        isSubmitting || isConnectorMissing
+                        isStepThreeSubmitDisabled
                           ? "cursor-not-allowed bg-[#a7a6f2]"
                           : "bg-[#4f49e2] shadow-[0_10px_24px_-18px_rgba(79,73,226,0.9)] hover:bg-[#433ccf]"
                       }`}

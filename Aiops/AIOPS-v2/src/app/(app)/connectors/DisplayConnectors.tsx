@@ -1,6 +1,6 @@
 "use client";
 
-import { Link2, Pencil, Plug, Trash2 } from "lucide-react";
+import { Link2, Pencil, Plug, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AGENT_API_BASE_URL,
@@ -345,32 +345,36 @@ export default function DisplayConnectors({
       {deleteTarget ? (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/35 px-4 py-8">
           <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_-30px_rgba(15,23,42,0.6)]">
-            <div className="flex items-center justify-between border-b border-[#eef1f7] px-6 py-4">
-              <h4 className="text-lg font-semibold text-[#111827]">
-                Delete Connector
-              </h4>
+            <div className="flex items-center justify-between border-b border-[#fee2e2] bg-[#fff5f5] px-6 py-4">
+              <div className="flex items-center gap-2 text-[#b91c1c]">
+                <Trash2 className="h-5 w-5" />
+                <h4 className="text-lg font-semibold">Delete Connector</h4>
+              </div>
               <button
                 type="button"
                 onClick={() => setDeleteTarget(null)}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f3f4f6] text-[#111827]"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#b91c1c]"
               >
-                <Trash2 className="h-4 w-4" />
+                <X className="h-4 w-4" />
               </button>
             </div>
             <div className="px-6 py-5">
               <p className="text-sm text-[#374151]">
                 Are you sure you want to delete{" "}
-                <span className="font-semibold text-[#111827]">
+                <span className="rounded-md bg-[#fee2e2] px-2 py-0.5 font-semibold text-[#b91c1c]">
                   {deleteTarget.provider_code}
                 </span>
                 ?
+              </p>
+              <p className="mt-3 text-xs text-[#9b1c1c]">
+                This action can’t be undone.
               </p>
             </div>
             <div className="flex items-center justify-end gap-3 border-t border-[#eef1f7] px-6 py-4">
               <button
                 type="button"
                 onClick={() => setDeleteTarget(null)}
-                className="rounded-xl border border-[#e5e7eb] px-5 py-2 text-sm font-semibold text-[#374151]"
+                className="rounded-xl border border-[#e5e7eb] px-5 py-2 text-sm font-semibold text-[#374151] hover:bg-[#f8fafc]"
               >
                 Cancel
               </button>
@@ -407,10 +411,10 @@ export default function DisplayConnectors({
                   }
                 }}
                 disabled={deletingId === deleteTarget.id}
-                className={`rounded-xl px-5 py-2 text-sm font-semibold text-white ${
+                className={`rounded-xl px-5 py-2 text-sm font-semibold text-white shadow-[0_10px_24px_-18px_rgba(239,68,68,0.8)] ${
                   deletingId === deleteTarget.id
                     ? "cursor-not-allowed bg-[#fca5a5]"
-                    : "bg-[#ef4444] shadow-[0_10px_24px_-18px_rgba(239,68,68,0.8)] hover:bg-[#dc2626]"
+                    : "bg-[#ef4444] hover:bg-[#dc2626]"
                 }`}
               >
                 {deletingId === deleteTarget.id ? "Deleting..." : "Delete"}

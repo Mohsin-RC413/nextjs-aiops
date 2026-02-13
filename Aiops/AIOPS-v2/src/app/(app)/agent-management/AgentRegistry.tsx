@@ -1026,14 +1026,15 @@ export default function AgentRegistry({
       {deleteTarget ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 py-8">
           <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_-30px_rgba(15,23,42,0.6)]">
-            <div className="flex items-center justify-between border-b border-[#eef1f7] px-6 py-4">
-              <h4 className="text-lg font-semibold text-[#111827]">
-                Delete Agent
-              </h4>
+            <div className="flex items-center justify-between border-b border-[#fee2e2] bg-[#fff5f5] px-6 py-4">
+              <div className="flex items-center gap-2 text-[#b91c1c]">
+                <Trash2 className="h-5 w-5" />
+                <h4 className="text-lg font-semibold">Delete Agent</h4>
+              </div>
               <button
                 type="button"
                 onClick={() => setDeleteTarget(null)}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f3f4f6] text-[#111827]"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#b91c1c]"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -1041,10 +1042,13 @@ export default function AgentRegistry({
             <div className="px-6 py-5">
               <p className="text-sm text-[#374151]">
                 Are you sure you want to delete{" "}
-                <span className="font-semibold text-[#111827]">
+                <span className="rounded-md bg-[#fee2e2] px-2 py-0.5 font-semibold text-[#b91c1c]">
                   {deleteTarget.name}
                 </span>
                 ?
+              </p>
+              <p className="mt-3 text-xs text-[#9b1c1c]">
+                This action can’t be undone.
               </p>
               {deleteError ? (
                 <p className="mt-3 text-sm text-[#dc2626]">{deleteError}</p>
@@ -1054,7 +1058,7 @@ export default function AgentRegistry({
               <button
                 type="button"
                 onClick={() => setDeleteTarget(null)}
-                className="rounded-xl border border-[#e5e7eb] px-5 py-2 text-sm font-semibold text-[#374151]"
+                className="rounded-xl border border-[#e5e7eb] px-5 py-2 text-sm font-semibold text-[#374151] hover:bg-[#f8fafc]"
               >
                 Cancel
               </button>
@@ -1062,10 +1066,10 @@ export default function AgentRegistry({
                 type="button"
                 onClick={handleConfirmDelete}
                 disabled={isDeleting}
-                className={`rounded-xl px-5 py-2 text-sm font-semibold text-white ${
+                className={`rounded-xl px-5 py-2 text-sm font-semibold text-white shadow-[0_10px_24px_-18px_rgba(239,68,68,0.8)] ${
                   isDeleting
                     ? "cursor-not-allowed bg-[#fca5a5]"
-                    : "bg-[#ef4444] shadow-[0_10px_24px_-18px_rgba(239,68,68,0.8)] hover:bg-[#dc2626]"
+                    : "bg-[#ef4444] hover:bg-[#dc2626]"
                 }`}
               >
                 {isDeleting ? "Deleting..." : "Delete"}
