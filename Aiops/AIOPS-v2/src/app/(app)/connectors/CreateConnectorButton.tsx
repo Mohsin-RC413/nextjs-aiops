@@ -5,7 +5,7 @@ import {
   AGENT_CONNECTORS_BASE_URL,
   AGENT_ORG_KEY,
 } from "@/config/agent";
-import { ChevronDown, Plus, X } from "lucide-react";
+import { ChevronDown, Plus, X, Plug } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type AgentTypeOption = {
@@ -84,7 +84,7 @@ function RoundedSelect({
       </button>
 
       {isOpen && !disabled && !loading ? (
-        <div className="absolute z-50 mt-2 w-full overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-[0_12px_24px_-20px_rgba(15,23,42,0.35)]">
+        <div className="absolute z-50 mt-2 w-full overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white shadow-[0_18px_34px_-22px_rgba(15,23,42,0.4)]">
           <button
             type="button"
             onClick={() => {
@@ -397,7 +397,7 @@ export default function CreateConnectorButton({
 
       {isOpen ? (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 px-4 py-8">
-          <div className="flex w-full max-w-2xl flex-col rounded-2xl bg-white shadow-[0_20px_60px_-35px_rgba(15,23,42,0.65)]">
+          <div className="flex w-full max-w-3xl flex-col rounded-2xl bg-white shadow-[0_20px_60px_-35px_rgba(15,23,42,0.65)]">
             <div className="flex items-center justify-between bg-[#4f49e2] px-6 py-4 text-white">
               <h3 className="text-lg font-semibold">Create Connectors</h3>
               <button
@@ -417,14 +417,38 @@ export default function CreateConnectorButton({
                 <p className="text-sm text-[#6b7280]">
                   {step === "schema" ? "Step 2 of 2" : "Step 1 of 2"}
                 </p>
+                <div className="flex max-w-xs items-center gap-2 pt-1">
+                  {[1, 2].map((index) => (
+                    <span
+                      key={index}
+                      className={`h-1.5 flex-1 rounded-full ${
+                        step === "schema"
+                          ? "bg-[#4f49e2]"
+                          : index === 1
+                            ? "bg-[#4f49e2]"
+                            : "bg-[#e2e8f0]"
+                      }`}
+                    />
+                  ))}
+                </div>
               </div>
-              <div className="rounded-2xl border border-[#eef1f7] bg-white p-6 shadow-[0_12px_24px_-20px_rgba(15,23,42,0.15)]">
+              <div className="mt-5 rounded-2xl border border-[#eef1f7] bg-white p-6 shadow-[0_12px_24px_-20px_rgba(15,23,42,0.15)]">
+                {loadError || schemaError || submitError ? (
+                  <div className="mb-4 rounded-xl border border-[#fee2e2] bg-[#fff5f5] px-4 py-3 text-sm text-[#b91c1c]">
+                    {loadError || schemaError || submitError}
+                  </div>
+                ) : null}
                 {step === "select" ? (
                   <>
                     <div className="mb-5">
-                      <h5 className="text-lg font-semibold text-[#111827]">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#eef2ff] text-[#4f49e2]">
+                          <Plug className="h-4 w-4" />
+                        </span>
+                        <h5 className="text-lg font-semibold text-[#111827]">
                         Configure the connector experience
-                      </h5>
+                        </h5>
+                      </div>
                       <p className="mt-2 text-sm text-[#6b7280]">
                         Pick the type and enterprise to connect.
                       </p>
@@ -489,19 +513,6 @@ export default function CreateConnectorButton({
                     ))}
                   </div>
                 )}
-                {loadError ? (
-                  <p className="mt-4 text-sm text-[#dc2626]">{loadError}</p>
-                ) : null}
-                {schemaError ? (
-                  <p className="mt-4 text-sm text-[#dc2626]">
-                    {schemaError}
-                  </p>
-                ) : null}
-                {submitError ? (
-                  <p className="mt-4 text-sm text-[#dc2626]">
-                    {submitError}
-                  </p>
-                ) : null}
               </div>
             </div>
 
@@ -514,7 +525,7 @@ export default function CreateConnectorButton({
                     return;
                   }
                 }}
-                className="rounded-xl border border-[#e5e7eb] px-6 py-2 text-sm font-semibold text-[#4f49e2]"
+                className="rounded-xl border border-[#e5e7eb] px-7 py-2.5 text-sm font-semibold text-[#4f49e2]"
               >
                 Prev
               </button>
@@ -526,7 +537,7 @@ export default function CreateConnectorButton({
                     ? isSubmitting
                     : !canProceed || isSchemaLoading
                 }
-                className={`rounded-xl px-6 py-2 text-sm font-semibold text-white ${
+                className={`min-w-[110px] rounded-xl px-7 py-2.5 text-sm font-semibold text-white ${
                   step === "schema"
                     ? isSubmitting
                       ? "cursor-not-allowed bg-[#c7c4f7]"
