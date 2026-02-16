@@ -78,13 +78,10 @@ const navSections: NavSection[] = [
         href: "#",
       },
       {
-        label: "Clouds",
+        label: "Transport",
         id: "platform-clouds-secondary",
         icon: <Truck className="h-5 w-5" />,
         href: "#",
-        // renamed to avoid duplicate "Clouds"
-        // keeping href as placeholder
-        label: "Transport",
       },
       {
         label: "LLM management",
