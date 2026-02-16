@@ -752,8 +752,15 @@ export default function CreateNewAgent({ onCreateSuccess }: CreateNewAgentProps)
                   ) : null}
 
                   <div className="mt-6 rounded-2xl border border-[#e5e7eb] bg-white p-5">
-                    <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[#94a3b8]">
-                      Available actions
+                    <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.2em] text-[#94a3b8]">
+                      <span>Available actions</span>
+                      {selectedActions.length === 0 && !actionsLoading ? (
+                        <span className="normal-case text-sm font-medium text-[#dc2626]">
+                          Select atleast one action.
+                        </span>
+                      ) : (
+                        <span />
+                      )}
                     </div>
 
                     <div className="mt-4 grid gap-4 md:grid-cols-[1fr_auto_1fr]">
