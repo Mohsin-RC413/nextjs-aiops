@@ -1,6 +1,13 @@
 "use client";
 
-import { Bell, ChevronDown, LogOut, Settings, UserRound } from "lucide-react";
+import {
+  Bell,
+  BookOpen,
+  ChevronDown,
+  LogOut,
+  Settings,
+  UserRound,
+} from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -49,6 +56,14 @@ export default function TopBar() {
       </div>
 
       <div className="relative flex items-center gap-4" ref={menuRef}>
+        <button
+          type="button"
+          className="flex h-10 w-10 items-center justify-center rounded-full border border-[#e6e9f2] text-[#6e7688] hover:text-[#3f35d3]"
+          aria-label="Help and docs"
+          title="Help and docs"
+        >
+          <BookOpen className="h-5 w-5" />
+        </button>
         <button
           type="button"
           className="relative flex h-10 w-10 items-center justify-center rounded-full border border-[#e6e9f2] text-[#6e7688] hover:text-[#3f35d3]"

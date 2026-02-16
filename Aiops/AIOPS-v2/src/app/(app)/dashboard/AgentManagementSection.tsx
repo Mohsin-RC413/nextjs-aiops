@@ -6,6 +6,7 @@ import {
   Eye,
   Filter,
   MessageCircle,
+  Plus,
   User,
   X
 } from "lucide-react";
@@ -53,6 +54,7 @@ export default function AgentManagementSection() {
   const [chatThreads, setChatThreads] = useState<
     Record<number, ChatMessage[]>
   >({});
+  const [expandedMessages, setExpandedMessages] = useState<Record<string, boolean>>({});
   const agentsRef = useRef<AgentRecord[]>([]);
   const requestIdRef = useRef(0);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
@@ -292,7 +294,7 @@ export default function AgentManagementSection() {
     }));
   };
 
-  const handleSendMessage = async () => {
+  const sendMessage = async (overrideMessage?: string) => {
     if (!activeChatAgent) {
       return;
     }
@@ -300,7 +302,7 @@ export default function AgentManagementSection() {
       setChatError("Agent is not running.");
       return;
     }
-    const trimmed = chatInput.trim();
+    const trimmed = (overrideMessage ?? chatInput).trim();
     if (!trimmed) {
       return;
     }
@@ -382,12 +384,33 @@ export default function AgentManagementSection() {
     }
   };
 
+  const handleSendMessage = () => {
+    void sendMessage();
+  };
+
   useEffect(() => {
     if (!activeChatAgent || !chatScrollRef.current) {
       return;
     }
     chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
   }, [activeChatAgent, chatThreads, sendingChatKey]);
+
+  const activeMessages =
+    activeChatKey !== null ? chatThreads[activeChatKey] ?? [] : [];
+  const lastActivityTime =
+    activeMessages.length > 0
+      ? activeMessages[activeMessages.length - 1].time
+      : "--";
+  const showSuggestions = activeMessages.length <= 1;
+  const quickSuggestions = [
+    "Show stopped apps",
+    "List critical alerts",
+    "Summarize recent activity",
+  ];
+  const MAX_MESSAGE_PREVIEW = 260;
+  const handleQuickSuggestion = (suggestion: string) => {
+    void sendMessage(suggestion);
+  };
 
   return (
     <div className="rounded-3xl bg-white p-6 shadow-[0_18px_50px_-38px_rgba(16,24,40,0.5)]">
@@ -825,10 +848,12 @@ export default function AgentManagementSection() {
                   <div className="mt-2 flex items-center gap-2 text-xs text-[#6b7280]">
                     <span className="h-3 w-3 rounded-full bg-[#16a34a]" />
                     <span>Online</span>
-                    <span className="text-[#cbd5e1]">•</span>
+                    <span className="text-[#cbd5e1]">&middot;</span>
                     <span>
                       Running at: {activeChatAgent.port ?? "Agent Not Started"}
                     </span>
+                    <span className="text-[#cbd5e1]">&middot;</span>
+                    <span>Last activity: {lastActivityTime}</span>
                   </div>
                 </div>
               </div>
@@ -844,60 +869,155 @@ export default function AgentManagementSection() {
             <div className="flex-1 min-h-0 px-8 pb-6 pt-4">
               <div
                 ref={chatScrollRef}
-                className="h-full min-h-0 overflow-y-auto rounded-2xl border border-[#e6eaf3] bg-[#f7f8fc] p-6"
+                className="h-full min-h-0 overflow-y-auto rounded-2xl border border-[#e6eaf3] bg-[#f7f8fc] p-5"
               >
-                {(activeChatKey !== null
-                  ? chatThreads[activeChatKey] ?? []
-                  : []
-                ).map((message) => (
-                  <div
-                    key={message.id}
-                    className={`mb-6 flex ${
-                      message.role === "user" ? "justify-end" : "justify-start"
-                    }`}
-                  >
-                    {message.role === "agent" ? (
-                      <div className="flex max-w-[70%] gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eef2ff] text-[#4f49e2]">
-                          <Bot className="h-5 w-5" />
+                {activeMessages.map((message, index) => {
+                  const isUser = message.role === "user";
+                  const isGrouped =
+                    index > 0 && activeMessages[index - 1].role === message.role;
+                  const showAvatar = !isGrouped;
+                  const isError = message.id.includes("agent-error");
+                  const isExpanded = Boolean(expandedMessages[message.id]);
+                  const isLong = message.text.length > MAX_MESSAGE_PREVIEW;
+                  const displayText =
+                    isLong && !isExpanded
+                      ? `${message.text.slice(0, MAX_MESSAGE_PREVIEW)}...`
+                      : message.text;
+
+                  return (
+                    <div
+                      key={message.id}
+                      className={`flex ${isUser ? "justify-end" : "justify-start"} ${
+                        showAvatar ? "mb-6" : "mb-4"
+                      }`}
+                    >
+                      {isUser ? (
+                        <div
+                          className={`flex max-w-[72%] items-start gap-3 ${
+                            showAvatar ? "" : "pr-12"
+                          }`}
+                        >
+                          <div className="rounded-2xl border border-[#e5e7eb] bg-white px-4 py-3 text-sm text-[#111827] shadow-sm">
+                            {showAvatar ? (
+                              <div className="mb-1 flex items-center justify-end gap-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8a94a6]">
+                                <span className="normal-case text-[#9aa3b2]">
+                                  {message.time}
+                                </span>
+                                <span>You</span>
+                              </div>
+                            ) : null}
+                            <p className="whitespace-pre-wrap break-words text-right">
+                              {displayText}
+                            </p>
+                            {isLong ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExpandedMessages((prev) => ({
+                                    ...prev,
+                                    [message.id]: !prev[message.id],
+                                  }))
+                                }
+                                className="mt-2 text-xs font-semibold text-[#4f49e2]"
+                              >
+                                {isExpanded ? "Show less" : "Show more"}
+                              </button>
+                            ) : null}
+                          </div>
+                          {showAvatar ? (
+                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#e5e7eb] bg-white text-[#111827]">
+                              <User className="h-5 w-5" />
+                            </div>
+                          ) : null}
                         </div>
-                        <div className="rounded-2xl bg-[#edf1f8] px-4 py-3 text-sm text-[#1f2937] shadow-sm">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8a94a6]">
-                            Agent
-                          </p>
-                          <p className="mt-2 whitespace-pre-wrap break-words">
-                            {message.text}
-                          </p>
+                      ) : (
+                        <div
+                          className={`flex max-w-[72%] items-start gap-3 ${
+                            showAvatar ? "" : "pl-12"
+                          }`}
+                        >
+                          {showAvatar ? (
+                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eef2ff] text-[#4f49e2]">
+                              <Bot className="h-5 w-5" />
+                            </div>
+                          ) : null}
+                          <div
+                            className={`rounded-2xl px-4 py-3 text-sm shadow-sm ${
+                              isError
+                                ? "border border-[#fecaca] bg-[#fff5f5] text-[#b91c1c]"
+                                : "bg-[#edf1f8] text-[#1f2937]"
+                            }`}
+                          >
+                            {showAvatar ? (
+                              <div className="mb-1 flex items-center justify-between gap-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8a94a6]">
+                                <span>Agent</span>
+                                <span className="normal-case text-[#9aa3b2]">
+                                  {message.time}
+                                </span>
+                              </div>
+                            ) : null}
+                            <p className="whitespace-pre-wrap break-words">
+                              {displayText}
+                            </p>
+                            {isLong ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExpandedMessages((prev) => ({
+                                    ...prev,
+                                    [message.id]: !prev[message.id],
+                                  }))
+                                }
+                                className={`mt-2 text-xs font-semibold ${
+                                  isError ? "text-[#b91c1c]" : "text-[#4f49e2]"
+                                }`}
+                              >
+                                {isExpanded ? "Show less" : "Show more"}
+                              </button>
+                            ) : null}
+                          </div>
                         </div>
-                      </div>
-                    ) : (
-                      <div className="flex max-w-[70%] items-start gap-3">
-                        <div className="rounded-2xl border border-[#e5e7eb] bg-white px-4 py-3 text-sm text-[#111827] shadow-sm">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8a94a6] text-right">
-                            You
-                          </p>
-                          <p className="mt-2 whitespace-pre-wrap break-words text-right">
-                            {message.text}
-                          </p>
-                        </div>
-                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#e5e7eb] bg-white text-[#111827]">
-                          <User className="h-5 w-5" />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-                {sendingChatKey === activeChatKey && activeChatKey !== null ? (
-                  <div className="text-sm text-[#8a94a6]">Agent is typing...</div>
-                ) : null}
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
             <div className="border-t border-[#eef1f7] px-8 py-4">
+              {showSuggestions ? (
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {quickSuggestions.map((suggestion) => (
+                    <button
+                      key={suggestion}
+                      type="button"
+                      onClick={() => handleQuickSuggestion(suggestion)}
+                      className="rounded-full border border-[#dbe2f0] bg-white px-3 py-1.5 text-xs font-semibold text-[#4f49e2] shadow-sm transition hover:border-[#bfc7e8]"
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              {sendingChatKey === activeChatKey && activeChatKey !== null ? (
+                <div className="mb-3 flex items-center gap-2 text-xs text-[#8a94a6]">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-[#a5b4fc]" />
+                  Agent is typing...
+                </div>
+              ) : null}
               {chatError ? (
-                <p className="mb-3 text-sm text-[#dc2626]">{chatError}</p>
+                <div className="mb-3 rounded-xl border border-[#fecaca] bg-[#fff5f5] px-4 py-2 text-xs font-semibold text-[#b91c1c]">
+                  {chatError}
+                </div>
               ) : null}
               <div className="flex items-center gap-3 rounded-2xl border border-[#e5e7eb] bg-[#f7f8fc] px-4 py-3">
+                <button
+                  type="button"
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-[#e1e5ef] bg-white text-[#4f49e2] shadow-sm"
+                  aria-label="Add"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
                 <input
                   type="text"
                   value={chatInput}
