@@ -82,6 +82,9 @@ const navSections: NavSection[] = [
         id: "platform-clouds-secondary",
         icon: <Truck className="h-5 w-5" />,
         href: "#",
+        // renamed to avoid duplicate "Clouds"
+        // keeping href as placeholder
+        label: "Transport",
       },
       {
         label: "LLM management",
@@ -143,8 +146,10 @@ export default function LeftNavbar() {
             className="h-[5.25rem] w-auto"
           />
           <div>
-            <p className="text-sm font-semibold text-[#5a45e5]">Royal Cyber</p>
-            <p className="text-sm text-[#111827]">AIOps for Enterprise</p>
+            <p className="text-sm font-semibold text-[#4f49e2]">Royal Cyber</p>
+            <p className="text-xs font-medium text-[#6b7280]">
+              AIOps for Enterprise
+            </p>
           </div>
         </div>
       </div>
@@ -153,27 +158,34 @@ export default function LeftNavbar() {
         {navSections.map((section) => (
           <div key={section.title} className="space-y-3">
             <div className="flex items-center gap-3">
-              <p className="whitespace-nowrap text-xs font-semibold uppercase tracking-[0.18em] text-[#9aa3b2] opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+              <p className="whitespace-nowrap text-xs font-semibold uppercase tracking-[0.18em] text-[#6b7280] opacity-0 transition-opacity duration-300 group-hover:opacity-100">
                 {section.title}
               </p>
               <span className="h-px flex-1 bg-[#d6dcea] opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
             </div>
             <div className="space-y-1">
               {section.items.map((item) => {
-                const isActive = item.href
-                  ? pathname === item.href
-                  : item.active;
+                const isActive =
+                  item.href && item.href !== "#"
+                    ? pathname === item.href ||
+                      pathname?.startsWith(`${item.href}/`)
+                    : item.active;
                 return (
                   <Link
                     key={item.id}
                     href={item.href ?? "#"}
-                    className={`group/item flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm font-medium transition ${
+                    title={item.label}
+                    aria-current={isActive ? "page" : undefined}
+                    className={`group/item relative flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm font-medium transition ${
                       isActive
-                        ? "bg-[#eef1ff] text-[#3f35d3]"
-                        : "text-[#677189] hover:bg-[#f6f7fb] hover:text-[#1b1f2a]"
+                        ? "bg-[#e9edff] text-[#3f35d3]"
+                        : "text-[#677189] hover:bg-[#f3f5ff] hover:text-[#1b1f2a]"
                     }`}
                   >
-                    <span className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-white text-[#566079] shadow-[0_1px_2px_rgba(0,0,0,0.06)] group-hover/item:text-[#3f35d3]">
+                    {isActive ? (
+                      <span className="absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full bg-[#4f49e2]" />
+                    ) : null}
+                    <span className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-white text-[#566079] shadow-[0_1px_2px_rgba(0,0,0,0.06)] transition group-hover/item:text-[#3f35d3]">
                       {item.icon}
                       {item.dot ? (
                         <span className="absolute -left-1.5 bottom-0 h-2 w-2 rounded-full bg-[#f26a1b]" />
