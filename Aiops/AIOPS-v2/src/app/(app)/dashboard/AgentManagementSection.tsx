@@ -3,10 +3,13 @@
 import { AGENT_API_BASE_URL, AGENT_HOST, AGENT_ORG_KEY } from "@/config/agent";
 import {
   Bot,
+  MoreHorizontal,
   Eye,
   Filter,
   MessageCircle,
+  Mic,
   Plus,
+  Send,
   User,
   X
 } from "lucide-react";
@@ -55,6 +58,7 @@ export default function AgentManagementSection() {
     Record<number, ChatMessage[]>
   >({});
   const [expandedMessages, setExpandedMessages] = useState<Record<string, boolean>>({});
+  const [openCopyId, setOpenCopyId] = useState<string | null>(null);
   const agentsRef = useRef<AgentRecord[]>([]);
   const requestIdRef = useRef(0);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
@@ -867,120 +871,163 @@ export default function AgentManagementSection() {
             </div>
 
             <div className="flex-1 min-h-0 px-8 pb-6 pt-4">
-              <div
-                ref={chatScrollRef}
-                className="h-full min-h-0 overflow-y-auto rounded-2xl border border-[#e6eaf3] bg-[#f7f8fc] p-5"
-              >
-                {activeMessages.map((message, index) => {
-                  const isUser = message.role === "user";
-                  const isGrouped =
-                    index > 0 && activeMessages[index - 1].role === message.role;
-                  const showAvatar = !isGrouped;
-                  const isError = message.id.includes("agent-error");
-                  const isExpanded = Boolean(expandedMessages[message.id]);
-                  const isLong = message.text.length > MAX_MESSAGE_PREVIEW;
-                  const displayText =
-                    isLong && !isExpanded
-                      ? `${message.text.slice(0, MAX_MESSAGE_PREVIEW)}...`
-                      : message.text;
+              <div className="relative h-full min-h-0 overflow-hidden rounded-2xl border border-[#e6eaf3] bg-[#f7f8fc]">
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                  <Bot className="h-56 w-56 text-[#d9def0] opacity-20" />
+                </div>
+                <div
+                  ref={chatScrollRef}
+                  className="relative z-10 h-full min-h-0 overflow-y-auto p-5"
+                >
+                  {activeMessages.map((message, index) => {
+                    const isUser = message.role === "user";
+                    const isGrouped =
+                      index > 0 &&
+                      activeMessages[index - 1].role === message.role;
+                    const showAvatar = !isGrouped;
+                    const isError = message.id.includes("agent-error");
+                    const isExpanded = Boolean(expandedMessages[message.id]);
+                    const isLong = message.text.length > MAX_MESSAGE_PREVIEW;
+                    const displayText =
+                      isLong && !isExpanded
+                        ? `${message.text.slice(0, MAX_MESSAGE_PREVIEW)}...`
+                        : message.text;
 
-                  return (
-                    <div
-                      key={message.id}
-                      className={`flex ${isUser ? "justify-end" : "justify-start"} ${
-                        showAvatar ? "mb-6" : "mb-4"
-                      }`}
-                    >
-                      {isUser ? (
-                        <div
-                          className={`flex max-w-[72%] items-start gap-3 ${
-                            showAvatar ? "" : "pr-12"
-                          }`}
-                        >
-                          <div className="rounded-2xl border border-[#e5e7eb] bg-white px-4 py-3 text-sm text-[#111827] shadow-sm">
+                    return (
+                      <div
+                        key={message.id}
+                        className={`flex ${
+                          isUser ? "justify-end" : "justify-start"
+                        } ${showAvatar ? "mb-6" : "mb-4"}`}
+                      >
+                        {isUser ? (
+                          <div
+                            className={`flex max-w-[72%] items-start gap-3 ${
+                              showAvatar ? "" : "pr-12"
+                            }`}
+                          >
+                            <div className="rounded-2xl border border-[#e5e7eb] bg-white px-4 py-3 text-sm text-[#111827] shadow-sm">
+                              {showAvatar ? (
+                                <div className="mb-1 flex items-center justify-end gap-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8a94a6]">
+                                  <span className="normal-case text-[#9aa3b2]">
+                                    {message.time}
+                                  </span>
+                                  <span>You</span>
+                                </div>
+                              ) : null}
+                              <p className="whitespace-pre-wrap break-words text-right">
+                                {displayText}
+                              </p>
+                              {isLong ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setExpandedMessages((prev) => ({
+                                      ...prev,
+                                      [message.id]: !prev[message.id],
+                                    }))
+                                  }
+                                  className="mt-2 text-xs font-semibold text-[#4f49e2]"
+                                >
+                                  {isExpanded ? "Show less" : "Show more"}
+                                </button>
+                              ) : null}
+                            </div>
                             {showAvatar ? (
-                              <div className="mb-1 flex items-center justify-end gap-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8a94a6]">
-                                <span className="normal-case text-[#9aa3b2]">
-                                  {message.time}
-                                </span>
-                                <span>You</span>
+                              <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#e5e7eb] bg-white text-[#111827]">
+                                <User className="h-5 w-5" />
                               </div>
                             ) : null}
-                            <p className="whitespace-pre-wrap break-words text-right">
-                              {displayText}
-                            </p>
-                            {isLong ? (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setExpandedMessages((prev) => ({
-                                    ...prev,
-                                    [message.id]: !prev[message.id],
-                                  }))
-                                }
-                                className="mt-2 text-xs font-semibold text-[#4f49e2]"
-                              >
-                                {isExpanded ? "Show less" : "Show more"}
-                              </button>
-                            ) : null}
                           </div>
-                          {showAvatar ? (
-                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#e5e7eb] bg-white text-[#111827]">
-                              <User className="h-5 w-5" />
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <div
-                          className={`flex max-w-[72%] items-start gap-3 ${
-                            showAvatar ? "" : "pl-12"
-                          }`}
-                        >
-                          {showAvatar ? (
-                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eef2ff] text-[#4f49e2]">
-                              <Bot className="h-5 w-5" />
-                            </div>
-                          ) : null}
+                        ) : (
                           <div
-                            className={`rounded-2xl px-4 py-3 text-sm shadow-sm ${
-                              isError
-                                ? "border border-[#fecaca] bg-[#fff5f5] text-[#b91c1c]"
-                                : "bg-[#edf1f8] text-[#1f2937]"
+                            className={`flex max-w-[72%] items-start gap-3 ${
+                              showAvatar ? "" : "pl-12"
                             }`}
                           >
                             {showAvatar ? (
-                              <div className="mb-1 flex items-center justify-between gap-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8a94a6]">
-                                <span>Agent</span>
-                                <span className="normal-case text-[#9aa3b2]">
-                                  {message.time}
-                                </span>
+                              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eef2ff] text-[#4f49e2]">
+                                <Bot className="h-5 w-5" />
                               </div>
                             ) : null}
-                            <p className="whitespace-pre-wrap break-words">
-                              {displayText}
-                            </p>
-                            {isLong ? (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setExpandedMessages((prev) => ({
-                                    ...prev,
-                                    [message.id]: !prev[message.id],
-                                  }))
-                                }
-                                className={`mt-2 text-xs font-semibold ${
-                                  isError ? "text-[#b91c1c]" : "text-[#4f49e2]"
-                                }`}
-                              >
-                                {isExpanded ? "Show less" : "Show more"}
-                              </button>
-                            ) : null}
+                            <div
+                              className={`rounded-2xl px-4 py-3 text-sm shadow-sm ${
+                                isError
+                                  ? "border border-[#fecaca] bg-[#fff5f5] text-[#b91c1c]"
+                                  : "bg-[#edf1f8] text-[#1f2937]"
+                              }`}
+                            >
+                              {showAvatar ? (
+                                <div className="mb-1 flex items-center justify-between gap-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8a94a6]">
+                                  <span>Agent</span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="normal-case text-[#9aa3b2]">
+                                      {message.time}
+                                    </span>
+                                    <div className="relative">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setOpenCopyId((prev) =>
+                                            prev === message.id ? null : message.id
+                                          )
+                                        }
+                                        className="flex h-7 w-7 items-center justify-center rounded-full bg-transparent text-[#6b7280] transition hover:text-[#4f49e2]"
+                                        aria-label="More actions"
+                                        title="More actions"
+                                      >
+                                        <MoreHorizontal className="h-4 w-4" />
+                                      </button>
+                                      {openCopyId === message.id ? (
+                                        <div className="absolute right-0 z-20 mt-2 overflow-hidden rounded-md border border-[#e5e7eb] bg-white shadow-[0_12px_24px_-20px_rgba(15,23,42,0.35)]">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              if (navigator?.clipboard) {
+                                                void navigator.clipboard.writeText(
+                                                  message.text
+                                                );
+                                              }
+                                              setOpenCopyId(null);
+                                            }}
+                                            className="w-full px-4 py-2 text-left text-xs font-semibold uppercase tracking-[0.2em] text-[#374151] hover:bg-[#f3f4f6]"
+                                          >
+                                            Copy
+                                          </button>
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : null}
+                              <p className="whitespace-pre-wrap break-words">
+                                {displayText}
+                              </p>
+                              {isLong ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setExpandedMessages((prev) => ({
+                                      ...prev,
+                                      [message.id]: !prev[message.id],
+                                    }))
+                                  }
+                                  className={`mt-2 text-xs font-semibold ${
+                                    isError
+                                      ? "text-[#b91c1c]"
+                                      : "text-[#4f49e2]"
+                                  }`}
+                                >
+                                  {isExpanded ? "Show less" : "Show more"}
+                                </button>
+                              ) : null}
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
@@ -1031,17 +1078,26 @@ export default function AgentManagementSection() {
                   placeholder="Ask something..."
                   className="flex-1 bg-transparent text-sm text-[#111827] outline-none placeholder:text-[#9ca3af]"
                 />
-                <button
-                  type="button"
-                  onClick={handleSendMessage}
-                  disabled={
-                    sendingChatKey === activeChatKey && activeChatKey !== null
-                  }
-                  className="flex items-center gap-2 rounded-xl bg-[#cfefff] px-4 py-2 text-sm font-semibold text-[#0b7ed9] disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  <MessageCircle className="h-4 w-4" />
-                  Submit
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    aria-label="Voice"
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-[#e1e5ef] bg-white text-[#4f49e2] shadow-sm"
+                  >
+                    <Mic className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSendMessage}
+                    disabled={
+                      sendingChatKey === activeChatKey && activeChatKey !== null
+                    }
+                    className="flex items-center gap-2 rounded-xl bg-[#4f49e2] px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_24px_-16px_rgba(79,73,226,0.9)] transition hover:bg-[#433ccf] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Send
+                    <Send className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
