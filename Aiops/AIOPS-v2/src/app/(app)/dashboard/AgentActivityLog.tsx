@@ -390,7 +390,7 @@ export default function AgentActivityLog() {
     : "Waiting for a running Mule agent";
 
   const renderLogBody = () => (
-    <div className="mt-6 max-h-[520px] space-y-6 overflow-y-auto pr-2">
+    <div className="soft-scrollbar mt-6 max-h-[520px] space-y-6 overflow-y-auto pr-2">
       {entries.length === 0 && !activeAgent ? (
         <div className="flex gap-4">
           <div className="flex flex-col items-center">
@@ -555,7 +555,7 @@ export default function AgentActivityLog() {
               </button>
             </div>
             <div className="flex-1 overflow-hidden">
-              <div className="h-full overflow-y-auto pr-2">
+              <div className="soft-scrollbar h-full overflow-y-auto pr-2">
                 <div className="h-0" />
                 {renderLogBody()}
               </div>

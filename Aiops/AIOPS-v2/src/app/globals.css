@@ -29,6 +29,32 @@ body {
   display: none;
 }
 
+/* Utility: soft themed scrollbar */
+.soft-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #c6cde6 transparent;
+}
+
+.soft-scrollbar::-webkit-scrollbar {
+  width: 10px;
+}
+
+.soft-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 8px 0;
+}
+
+.soft-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #cfd6ee 0%, #b9c2e4 100%);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.soft-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #b8c1eb 0%, #a8b2df 100%);
+}
+
 @keyframes toastFade {
   0% {
     opacity: 1;

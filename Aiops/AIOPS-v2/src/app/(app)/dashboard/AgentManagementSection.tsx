@@ -877,7 +877,7 @@ export default function AgentManagementSection() {
                 </div>
                 <div
                   ref={chatScrollRef}
-                  className="relative z-10 h-full min-h-0 overflow-y-auto p-5"
+                  className="soft-scrollbar relative z-10 h-full min-h-0 overflow-y-auto p-5"
                 >
                   {activeMessages.map((message, index) => {
                     const isUser = message.role === "user";
