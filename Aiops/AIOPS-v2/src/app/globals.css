@@ -116,3 +116,23 @@ body {
   clip-path: inset(0 100% 0 0);
   animation: logReveal 1.6s steps(40, end) forwards;
 }
+
+@keyframes typingDots {
+  0% {
+    width: 0.6ch;
+  }
+  50% {
+    width: 4.2ch;
+  }
+  100% {
+    width: 0.6ch;
+  }
+}
+
+.typing-dots {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: bottom;
+  white-space: nowrap;
+  animation: typingDots 1.6s steps(4, end) infinite;
+}

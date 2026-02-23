@@ -916,9 +916,15 @@ export default function AgentRegistry({
                 const runningAt = agent.port
                   ? agent.port.toString()
                   : "Agent Not Started";
-                const modified = agent.start_time
-                  ? `Started at ${agent.start_time}`
-                  : "Not started";
+                const modified = isOnline
+                  ? agent.start_time
+                    ? `Started at ${agent.start_time}`
+                    : "Not started"
+                  : agent.stop_time
+                    ? `Stopped at ${agent.stop_time}`
+                    : agent.start_time
+                      ? `Started at ${agent.start_time}`
+                      : "Not started";
                 return (
                 <div
                   key={`${agent.name}-${index}`}

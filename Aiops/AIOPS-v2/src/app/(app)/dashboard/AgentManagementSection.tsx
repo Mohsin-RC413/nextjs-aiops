@@ -3,11 +3,11 @@
 import { AGENT_API_BASE_URL, AGENT_HOST, AGENT_ORG_KEY } from "@/config/agent";
 import {
   Bot,
-  MoreHorizontal,
   Eye,
   Filter,
   MessageCircle,
   Mic,
+  MoreHorizontal,
   Plus,
   Send,
   User,
@@ -406,14 +406,48 @@ export default function AgentManagementSection() {
       ? activeMessages[activeMessages.length - 1].time
       : "--";
   const showSuggestions = activeMessages.length <= 1;
-  const quickSuggestions = [
-    "Show stopped apps",
-    "List critical alerts",
-    "Summarize recent activity",
-  ];
+  const isServiceNowAgent = (activeChatAgent?.enterprise ?? "")
+    .toLowerCase()
+    .includes("servicenow");
+  const quickSuggestions = isServiceNowAgent
+    ? ["Show today incidents", "Show all incidents"]
+    : ["Show stopped apps", "List critical alerts", "Summarize recent activity"];
   const MAX_MESSAGE_PREVIEW = 260;
   const handleQuickSuggestion = (suggestion: string) => {
     void sendMessage(suggestion);
+  };
+  const renderMessageText = (text: string) => {
+    const segments: React.ReactNode[] = [];
+    let buffer = "";
+    let bold = false;
+    let keyIndex = 0;
+
+    for (let i = 0; i < text.length; i += 1) {
+      if (text[i] === "*" && text[i + 1] === "*") {
+        if (buffer) {
+          segments.push(
+            bold ? (
+              <strong key={`b-${keyIndex++}`}>{buffer}</strong>
+            ) : (
+              buffer
+            )
+          );
+          buffer = "";
+        }
+        bold = !bold;
+        i += 1;
+        continue;
+      }
+      buffer += text[i];
+    }
+
+    if (buffer) {
+      segments.push(
+        bold ? <strong key={`b-${keyIndex++}`}>{buffer}</strong> : buffer
+      );
+    }
+
+    return segments;
   };
 
   return (
@@ -877,7 +911,7 @@ export default function AgentManagementSection() {
                 </div>
                 <div
                   ref={chatScrollRef}
-                  className="soft-scrollbar relative z-10 h-full min-h-0 overflow-y-auto p-5"
+                  className="soft-scrollbar relative z-10 h-full min-h-0 overflow-y-auto overflow-x-hidden p-5"
                 >
                   {activeMessages.map((message, index) => {
                     const isUser = message.role === "user";
@@ -902,7 +936,7 @@ export default function AgentManagementSection() {
                       >
                         {isUser ? (
                           <div
-                            className={`flex max-w-[72%] items-start gap-3 ${
+                            className={`flex min-w-0 max-w-[72%] items-start gap-3 ${
                               showAvatar ? "" : "pr-12"
                             }`}
                           >
@@ -915,7 +949,7 @@ export default function AgentManagementSection() {
                                   <span>You</span>
                                 </div>
                               ) : null}
-                              <p className="whitespace-pre-wrap break-words text-right">
+                              <p className="whitespace-pre-wrap break-all text-right">
                                 {displayText}
                               </p>
                               {isLong ? (
@@ -933,20 +967,20 @@ export default function AgentManagementSection() {
                                 </button>
                               ) : null}
                             </div>
-                            {showAvatar ? (
-                              <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#e5e7eb] bg-white text-[#111827]">
-                                <User className="h-5 w-5" />
-                              </div>
-                            ) : null}
+                          {showAvatar ? (
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#e5e7eb] bg-white text-[#111827]">
+                              <User className="h-5 w-5" />
+                            </div>
+                          ) : null}
                           </div>
                         ) : (
                           <div
-                            className={`flex max-w-[72%] items-start gap-3 ${
+                            className={`flex min-w-0 max-w-[72%] items-start gap-3 ${
                               showAvatar ? "" : "pl-12"
                             }`}
                           >
                             {showAvatar ? (
-                              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eef2ff] text-[#4f49e2]">
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#eef2ff] text-[#4f49e2]">
                                 <Bot className="h-5 w-5" />
                               </div>
                             ) : null}
@@ -959,7 +993,7 @@ export default function AgentManagementSection() {
                             >
                               {showAvatar ? (
                                 <div className="mb-1 flex items-center justify-between gap-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8a94a6]">
-                                  <span>Agent</span>
+                                  <span>{activeChatAgent?.name ?? "Agent"}</span>
                                   <div className="flex items-center gap-2">
                                     <span className="normal-case text-[#9aa3b2]">
                                       {message.time}
@@ -1000,8 +1034,8 @@ export default function AgentManagementSection() {
                                   </div>
                                 </div>
                               ) : null}
-                              <p className="whitespace-pre-wrap break-words">
-                                {displayText}
+                              <p className="whitespace-pre-wrap break-all">
+                                {renderMessageText(displayText)}
                               </p>
                               {isLong ? (
                                 <button
@@ -1033,7 +1067,7 @@ export default function AgentManagementSection() {
 
             <div className="border-t border-[#eef1f7] px-8 py-4">
               {showSuggestions ? (
-                <div className="mb-3 flex flex-wrap gap-2">
+                <div className="mb-3 flex flex-nowrap justify-center gap-2">
                   {quickSuggestions.map((suggestion) => (
                     <button
                       key={suggestion}
@@ -1047,9 +1081,12 @@ export default function AgentManagementSection() {
                 </div>
               ) : null}
               {sendingChatKey === activeChatKey && activeChatKey !== null ? (
-                <div className="mb-3 flex items-center gap-2 text-xs text-[#8a94a6]">
-                  <span className="h-2 w-2 animate-pulse rounded-full bg-[#a5b4fc]" />
-                  Agent is typing...
+                <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-[#8a94a6]">
+                  <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-[#a5b4fc]" />
+                  <span>
+                    Agent is typing
+                    <span className="typing-dots">....</span>
+                  </span>
                 </div>
               ) : null}
               {chatError ? (
