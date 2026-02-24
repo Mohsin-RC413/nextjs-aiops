@@ -4,6 +4,7 @@ import {
   Activity,
   Bell,
   Bot,
+  ChevronDown,
   Maximize2,
   Minimize2,
   RefreshCw,
@@ -119,6 +120,8 @@ const parseIncomingLog = (payload: string): ActivityEntry => {
 export default function AgentActivityLog() {
   const [entries, setEntries] = useState<ActivityEntry[]>([]);
   const [activeAgent, setActiveAgent] = useState<ActiveMuleAgent | null>(null);
+  const [muleAgents, setMuleAgents] = useState<ActiveMuleAgent[]>([]);
+  const [selectedMuleId, setSelectedMuleId] = useState<number | null>(null);
   const [isLoadingAgents, setIsLoadingAgents] = useState(true);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
@@ -145,33 +148,55 @@ export default function AgentActivityLog() {
       socketRef.current = null;
     }
     setIsConnecting(false);
-    if (activeAgent) {
-      setIsConnecting(true);
-      const socketUrl = `${getSocketBase()}:${activeAgent.port}/ws/agent?agent_id=${activeAgent.agentId}`;
-      const socket = new WebSocket(socketUrl);
-      socketRef.current = socket;
-
-      socket.onopen = () => {
-        setIsConnecting(false);
-      };
-
-      socket.onmessage = (event) => {
-        console.log("WebSocket log:", event.data);
-        const incoming = parseIncomingLog(String(event.data ?? ""));
-        queueRef.current.push(incoming);
-        if (!typingRef.current) {
-          flushQueue();
-        }
-      };
-
-      socket.onerror = () => {
-        setIsConnecting(false);
-      };
-
-      socket.onclose = () => {
-        setIsConnecting(false);
-      };
+    if (!activeAgent?.port) {
+      setIsConnecting(false);
+      return;
     }
+
+    setIsConnecting(true);
+    const socketUrl = `${getSocketBase()}:${activeAgent.port}/ws/agent?agent_id=${activeAgent.agentId}`;
+    const socket = new WebSocket(socketUrl);
+    socketRef.current = socket;
+
+    socket.onopen = () => {
+      setIsConnecting(false);
+    };
+
+    socket.onmessage = (event) => {
+      console.log("WebSocket log:", event.data);
+      const incoming = parseIncomingLog(String(event.data ?? ""));
+      queueRef.current.push(incoming);
+      if (!typingRef.current) {
+        flushQueue();
+      }
+    };
+
+    socket.onerror = () => {
+      setIsConnecting(false);
+    };
+
+    socket.onclose = () => {
+      setIsConnecting(false);
+    };
+  };
+
+  const resetSocket = () => {
+    setEntries([]);
+    queueRef.current = [];
+    typingRef.current = false;
+    if (timeoutRef.current) {
+      window.clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    if (typingIntervalRef.current) {
+      window.clearInterval(typingIntervalRef.current);
+      typingIntervalRef.current = null;
+    }
+    if (socketRef.current) {
+      socketRef.current.close();
+      socketRef.current = null;
+    }
+    setIsConnecting(false);
   };
 
   const flushQueue = () => {
@@ -237,42 +262,45 @@ export default function AgentActivityLog() {
         const data = await response.json();
         const agents = Array.isArray(data?.agents) ? data.agents : [];
 
-        const muleAgent = agents.find((agent: any) => {
-          const enterprise = String(agent?.enterprise ?? "").toLowerCase();
-          const status = String(agent?.status ?? "").toUpperCase();
-          return enterprise === "mule" && status === "STARTED";
-        });
+        const muleList = agents
+          .filter((agent: any) => {
+            const enterprise = String(agent?.enterprise ?? "").toLowerCase();
+            return enterprise === "mule";
+          })
+          .map((agent: any) => ({
+            agentId: Number(agent.agentId),
+            name: String(agent.name ?? "Mule Agent"),
+            port:
+              agent.port === null || agent.port === undefined
+                ? null
+                : Number(agent.port),
+          }));
 
         if (!isMounted) {
           return;
         }
 
-        if (muleAgent) {
-          setActiveAgent({
-            agentId: Number(muleAgent.agentId),
-            name: String(muleAgent.name ?? "Mule Agent"),
-            port:
-              muleAgent.port === null || muleAgent.port === undefined
-                ? null
-                : Number(muleAgent.port),
-          });
+        setMuleAgents(muleList);
+
+        const preferred =
+          muleList.find((agent) => agent.port !== null) ?? muleList[0] ?? null;
+        const selected =
+          muleList.find((agent) => agent.agentId === selectedMuleId) ??
+          preferred;
+
+        if (selected) {
+          setSelectedMuleId(selected.agentId);
+          setActiveAgent(selected);
         } else {
+          setSelectedMuleId(null);
           setActiveAgent(null);
-          setEntries([]);
-          queueRef.current = [];
-          typingRef.current = false;
-          if (typingIntervalRef.current) {
-            window.clearInterval(typingIntervalRef.current);
-            typingIntervalRef.current = null;
-          }
-          if (timeoutRef.current) {
-            window.clearTimeout(timeoutRef.current);
-            timeoutRef.current = null;
-          }
+          resetSocket();
         }
       } catch (error) {
         if (isMounted) {
           setActiveAgent(null);
+          setMuleAgents([]);
+          setSelectedMuleId(null);
           setEntries([]);
         }
       } finally {
@@ -296,7 +324,7 @@ export default function AgentActivityLog() {
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleFocus);
     };
-  }, []);
+  }, [selectedMuleId]);
 
   useEffect(() => {
     if (!activeAgent) {
@@ -384,10 +412,10 @@ export default function AgentActivityLog() {
   }, [activeAgent]);
 
   const headerText = activeAgent
-    ? `Streaming from ${activeAgent.name}${
-        activeAgent.port ? ` (running at ${activeAgent.port})` : ""
-      }`
-    : "Waiting for a running Mule agent";
+    ? activeAgent.port
+      ? `Streaming from ${activeAgent.name} (running at ${activeAgent.port})`
+      : `${activeAgent.name} is not running`
+    : "Waiting for a Mule agent";
 
   const renderLogBody = () => (
     <div className="soft-scrollbar mt-6 max-h-[520px] space-y-6 overflow-y-auto pr-2">
@@ -504,6 +532,31 @@ export default function AgentActivityLog() {
           </div>
         </div>
         <div className="mt-1 inline-flex items-center gap-2">
+          {muleAgents.length > 0 ? (
+            <div className="relative">
+              <select
+                value={selectedMuleId ?? ""}
+                onChange={(event) => {
+                  const nextId = Number(event.target.value);
+                  resetSocket();
+                  setSelectedMuleId(Number.isNaN(nextId) ? null : nextId);
+                  const nextAgent =
+                    muleAgents.find((agent) => agent.agentId === nextId) ?? null;
+                  setActiveAgent(nextAgent);
+                }}
+                className="appearance-none rounded-xl border border-[#e3e7f2] bg-white px-4 py-2 pr-9 text-sm font-semibold text-[#111827] shadow-[0_8px_16px_-14px_rgba(16,24,40,0.35)] focus:border-[#4f49e2] focus:outline-none focus:ring-2 focus:ring-[#4f49e2]/20"
+              >
+                {muleAgents.map((agent) => (
+                  <option key={agent.agentId} value={agent.agentId}>
+                    {agent.name}
+                  </option>
+                ))}
+              </select>
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#9aa3b2]">
+                <ChevronDown className="h-4 w-4" />
+              </span>
+            </div>
+          ) : null}
           <button
             type="button"
             onClick={() => setIsMaximized(true)}
@@ -544,15 +597,43 @@ export default function AgentActivityLog() {
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsMaximized(false)}
-                className="mt-1 inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#e3e7f2] bg-white text-[#6b7280] shadow-[0_8px_16px_-14px_rgba(16,24,40,0.4)] transition hover:text-[#4f49e2]"
-                aria-label="Minimize logs"
-                title="Minimize logs"
-              >
-                <Minimize2 className="h-4 w-4" />
-              </button>
+              <div className="mt-1 inline-flex items-center gap-2">
+                {muleAgents.length > 0 ? (
+                  <div className="relative">
+                    <select
+                      value={selectedMuleId ?? ""}
+                      onChange={(event) => {
+                        const nextId = Number(event.target.value);
+                        resetSocket();
+                        setSelectedMuleId(Number.isNaN(nextId) ? null : nextId);
+                        const nextAgent =
+                          muleAgents.find((agent) => agent.agentId === nextId) ??
+                          null;
+                        setActiveAgent(nextAgent);
+                      }}
+                      className="appearance-none rounded-xl border border-[#e3e7f2] bg-white px-4 py-2 pr-9 text-sm font-semibold text-[#111827] shadow-[0_8px_16px_-14px_rgba(16,24,40,0.35)] focus:border-[#4f49e2] focus:outline-none focus:ring-2 focus:ring-[#4f49e2]/20"
+                    >
+                      {muleAgents.map((agent) => (
+                        <option key={agent.agentId} value={agent.agentId}>
+                          {agent.name}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#9aa3b2]">
+                      <ChevronDown className="h-4 w-4" />
+                    </span>
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setIsMaximized(false)}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#e3e7f2] bg-white text-[#6b7280] shadow-[0_8px_16px_-14px_rgba(16,24,40,0.4)] transition hover:text-[#4f49e2]"
+                  aria-label="Minimize logs"
+                  title="Minimize logs"
+                >
+                  <Minimize2 className="h-4 w-4" />
+                </button>
+              </div>
             </div>
             <div className="flex-1 overflow-hidden">
               <div className="soft-scrollbar h-full overflow-y-auto pr-2">
