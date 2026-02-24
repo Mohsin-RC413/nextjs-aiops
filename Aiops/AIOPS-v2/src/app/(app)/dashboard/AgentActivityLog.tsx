@@ -10,7 +10,7 @@ import {
   RefreshCw,
   Sparkles,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AGENT_API_BASE_URL, AGENT_ORG_KEY, AGENT_WS_HOST } from "@/config/agent";
 
@@ -29,6 +29,79 @@ type ActiveMuleAgent = {
   name: string;
   port: number | null;
 };
+
+type MuleAgentSelectProps = {
+  agents: ActiveMuleAgent[];
+  selectedId: number | null;
+  onSelect: (agentId: number) => void;
+};
+
+function MuleAgentSelect({
+  agents,
+  selectedId,
+  onSelect,
+}: MuleAgentSelectProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const selectedAgent = useMemo(
+    () => agents.find((agent) => agent.agentId === selectedId) ?? agents[0],
+    [agents, selectedId]
+  );
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+    const handleOutside = (event: MouseEvent) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [isOpen]);
+
+  if (!selectedAgent) {
+    return null;
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="flex items-center gap-2 rounded-xl border border-[#e3e7f2] bg-white px-4 py-2 text-sm font-semibold text-[#111827] shadow-[0_8px_16px_-14px_rgba(16,24,40,0.35)] transition focus:border-[#4f49e2] focus:outline-none focus:ring-2 focus:ring-[#4f49e2]/20"
+      >
+        <span>{selectedAgent.name}</span>
+        <ChevronDown className="h-4 w-4 text-[#9aa3b2]" />
+      </button>
+      {isOpen ? (
+        <div className="absolute right-0 z-20 mt-2 w-56 overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-[0_12px_24px_-20px_rgba(15,23,42,0.35)]">
+          {agents.map((agent) => (
+            <button
+              key={agent.agentId}
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
+                onSelect(agent.agentId);
+              }}
+              className={`flex w-full items-center px-4 py-2 text-left text-sm ${
+                agent.agentId === selectedAgent.agentId
+                  ? "bg-[#eef2ff] text-[#4f49e2]"
+                  : "text-[#111827] hover:bg-[#f3f4f6]"
+              }`}
+            >
+              {agent.name}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 const activityTagStyles: Record<ActivityEntry["tag"], string> = {
   success: "bg-[#e6f9ee] text-[#16a34a]",
@@ -533,29 +606,17 @@ export default function AgentActivityLog() {
         </div>
         <div className="mt-1 inline-flex items-center gap-2">
           {muleAgents.length > 0 ? (
-            <div className="relative">
-              <select
-                value={selectedMuleId ?? ""}
-                onChange={(event) => {
-                  const nextId = Number(event.target.value);
-                  resetSocket();
-                  setSelectedMuleId(Number.isNaN(nextId) ? null : nextId);
-                  const nextAgent =
-                    muleAgents.find((agent) => agent.agentId === nextId) ?? null;
-                  setActiveAgent(nextAgent);
-                }}
-                className="appearance-none rounded-xl border border-[#e3e7f2] bg-white px-4 py-2 pr-9 text-sm font-semibold text-[#111827] shadow-[0_8px_16px_-14px_rgba(16,24,40,0.35)] focus:border-[#4f49e2] focus:outline-none focus:ring-2 focus:ring-[#4f49e2]/20"
-              >
-                {muleAgents.map((agent) => (
-                  <option key={agent.agentId} value={agent.agentId}>
-                    {agent.name}
-                  </option>
-                ))}
-              </select>
-              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#9aa3b2]">
-                <ChevronDown className="h-4 w-4" />
-              </span>
-            </div>
+            <MuleAgentSelect
+              agents={muleAgents}
+              selectedId={selectedMuleId}
+              onSelect={(nextId) => {
+                resetSocket();
+                setSelectedMuleId(nextId);
+                const nextAgent =
+                  muleAgents.find((agent) => agent.agentId === nextId) ?? null;
+                setActiveAgent(nextAgent);
+              }}
+            />
           ) : null}
           <button
             type="button"
@@ -599,30 +660,18 @@ export default function AgentActivityLog() {
               </div>
               <div className="mt-1 inline-flex items-center gap-2">
                 {muleAgents.length > 0 ? (
-                  <div className="relative">
-                    <select
-                      value={selectedMuleId ?? ""}
-                      onChange={(event) => {
-                        const nextId = Number(event.target.value);
-                        resetSocket();
-                        setSelectedMuleId(Number.isNaN(nextId) ? null : nextId);
-                        const nextAgent =
-                          muleAgents.find((agent) => agent.agentId === nextId) ??
-                          null;
-                        setActiveAgent(nextAgent);
-                      }}
-                      className="appearance-none rounded-xl border border-[#e3e7f2] bg-white px-4 py-2 pr-9 text-sm font-semibold text-[#111827] shadow-[0_8px_16px_-14px_rgba(16,24,40,0.35)] focus:border-[#4f49e2] focus:outline-none focus:ring-2 focus:ring-[#4f49e2]/20"
-                    >
-                      {muleAgents.map((agent) => (
-                        <option key={agent.agentId} value={agent.agentId}>
-                          {agent.name}
-                        </option>
-                      ))}
-                    </select>
-                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#9aa3b2]">
-                      <ChevronDown className="h-4 w-4" />
-                    </span>
-                  </div>
+                  <MuleAgentSelect
+                    agents={muleAgents}
+                    selectedId={selectedMuleId}
+                    onSelect={(nextId) => {
+                      resetSocket();
+                      setSelectedMuleId(nextId);
+                      const nextAgent =
+                        muleAgents.find((agent) => agent.agentId === nextId) ??
+                        null;
+                      setActiveAgent(nextAgent);
+                    }}
+                  />
                 ) : null}
                 <button
                   type="button"
