@@ -17,7 +17,7 @@ export default function ConnectorsPage() {
           <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eef2ff] text-[#4f49e2]">
             <Plug className="h-5 w-5" />
           </span>
-          Connectors
+          Credentials management
         </h2>
         <div className="flex flex-1 justify-center">
           <div
@@ -32,7 +32,7 @@ export default function ConnectorsPage() {
               onChange={(event) => setSearchValue(event.target.value)}
               onFocus={() => setIsSearchFocused(true)}
               onBlur={() => setIsSearchFocused(false)}
-              placeholder="Search connectors.."
+              placeholder="Search credentials.."
               className="w-full bg-transparent text-sm text-[#4f49e2] placeholder:text-[#4f49e2] focus:outline-none"
             />
           </div>

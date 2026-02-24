@@ -95,7 +95,7 @@ const navSections: NavSection[] = [
     title: "Operations",
     items: [
       {
-        label: "Connectors",
+        label: "Credentials management",
         id: "operations-connectors",
         icon: <Link2 className="h-5 w-5" />,
         dot: true,
