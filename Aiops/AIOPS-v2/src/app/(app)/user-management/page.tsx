@@ -1,0 +1,618 @@
+"use client";
+
+import {
+  Building2,
+  Filter,
+  LayoutGrid,
+  Plus,
+  Search,
+  ShieldCheck,
+  Users2,
+} from "lucide-react";
+import { useMemo, useState } from "react";
+
+type Organization = {
+  name: string;
+  domain: string;
+  users: number;
+  plan: string;
+  status: "Active" | "Pending" | "Suspended";
+};
+
+type Menu = {
+  name: string;
+  category: string;
+  items: number;
+  lastUpdated: string;
+  status: "Published" | "Draft";
+};
+
+type Role = {
+  role: string;
+  scope: string;
+  users: number;
+  updated: string;
+  status: "Active" | "Archived";
+};
+
+type User = {
+  name: string;
+  email: string;
+  role: string;
+  lastActive: string;
+  status: "Active" | "Invited" | "Suspended";
+};
+
+const tabs = [
+  { id: "organization", label: "Organization", icon: Building2, count: 3 },
+  { id: "menu", label: "Menu", icon: LayoutGrid, count: 8 },
+  { id: "role", label: "Role", icon: ShieldCheck, count: 6 },
+  { id: "user", label: "User", icon: Users2, count: 42 },
+] as const;
+
+const organizations: Organization[] = [
+  {
+    name: "Royal Cyber",
+    domain: "royalcyber.com",
+    users: 82,
+    plan: "Enterprise",
+    status: "Active",
+  },
+  {
+    name: "Nimbus Retail",
+    domain: "nimbusretail.io",
+    users: 24,
+    plan: "Growth",
+    status: "Pending",
+  },
+  {
+    name: "Latitude Health",
+    domain: "latitudehealth.org",
+    users: 17,
+    plan: "Professional",
+    status: "Suspended",
+  },
+];
+
+const menus: Menu[] = [
+  {
+    name: "Core Navigation",
+    category: "Platform",
+    items: 12,
+    lastUpdated: "Feb 28, 2026",
+    status: "Published",
+  },
+  {
+    name: "Operations Suite",
+    category: "Operations",
+    items: 9,
+    lastUpdated: "Feb 18, 2026",
+    status: "Published",
+  },
+  {
+    name: "Experimental Apps",
+    category: "Labs",
+    items: 4,
+    lastUpdated: "Jan 31, 2026",
+    status: "Draft",
+  },
+];
+
+const roles: Role[] = [
+  {
+    role: "Platform Admin",
+    scope: "Global",
+    users: 4,
+    updated: "Mar 1, 2026",
+    status: "Active",
+  },
+  {
+    role: "Operations Lead",
+    scope: "Operations",
+    users: 9,
+    updated: "Feb 19, 2026",
+    status: "Active",
+  },
+  {
+    role: "Read-only Analyst",
+    scope: "Insights",
+    users: 15,
+    updated: "Jan 23, 2026",
+    status: "Archived",
+  },
+];
+
+const users: User[] = [
+  {
+    name: "Alice Admin",
+    email: "alice.admin@demo.ai",
+    role: "Platform Admin",
+    lastActive: "Today, 09:12 AM",
+    status: "Active",
+  },
+  {
+    name: "John Doe",
+    email: "john.doe@demo.ai",
+    role: "Operations Lead",
+    lastActive: "Yesterday, 06:40 PM",
+    status: "Active",
+  },
+  {
+    name: "Kiran Patel",
+    email: "kiran.patel@demo.ai",
+    role: "Read-only Analyst",
+    lastActive: "Feb 26, 2026",
+    status: "Invited",
+  },
+  {
+    name: "Mia Chen",
+    email: "mia.chen@demo.ai",
+    role: "Menu Designer",
+    lastActive: "Feb 12, 2026",
+    status: "Suspended",
+  },
+];
+
+const statusStyles: Record<string, string> = {
+  Active: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  Pending: "bg-amber-50 text-amber-700 border-amber-200",
+  Suspended: "bg-rose-50 text-rose-700 border-rose-200",
+  Published: "bg-sky-50 text-sky-700 border-sky-200",
+  Draft: "bg-slate-100 text-slate-700 border-slate-200",
+  Archived: "bg-slate-100 text-slate-700 border-slate-200",
+  Invited: "bg-indigo-50 text-indigo-700 border-indigo-200",
+};
+
+const statsByTab = {
+  organization: [
+    { label: "Organizations", value: "3", meta: "1 onboarding" },
+    { label: "Total users", value: "123", meta: "+14 this month" },
+    { label: "Active plans", value: "2", meta: "Enterprise focus" },
+  ],
+  menu: [
+    { label: "Menus", value: "8", meta: "2 in draft" },
+    { label: "Menu items", value: "46", meta: "Last 30 days" },
+    { label: "Last publish", value: "2 days", meta: "Stable release" },
+  ],
+  role: [
+    { label: "Roles", value: "6", meta: "1 archived" },
+    { label: "Scoped roles", value: "4", meta: "Ops + Insights" },
+    { label: "Avg members", value: "8", meta: "Balanced coverage" },
+  ],
+  user: [
+    { label: "Total users", value: "42", meta: "82% active" },
+    { label: "Pending invites", value: "5", meta: "Expires in 7 days" },
+    { label: "Suspended", value: "2", meta: "Requires review" },
+  ],
+} as const;
+
+const filterRows = <T extends Record<string, string | number>>(
+  rows: T[],
+  fields: (keyof T)[],
+  query: string
+) => {
+  if (!query) {
+    return rows;
+  }
+  return rows.filter((row) =>
+    fields.some((field) =>
+      String(row[field]).toLowerCase().includes(query.toLowerCase())
+    )
+  );
+};
+
+export default function UserManagementPage() {
+  const [activeTab, setActiveTab] =
+    useState<(typeof tabs)[number]["id"]>("organization");
+  const [searchValue, setSearchValue] = useState("");
+
+  const filteredOrganizations = useMemo(
+    () =>
+      filterRows(organizations, ["name", "domain", "plan", "status"], searchValue),
+    [searchValue]
+  );
+  const filteredMenus = useMemo(
+    () =>
+      filterRows(menus, ["name", "category", "status", "lastUpdated"], searchValue),
+    [searchValue]
+  );
+  const filteredRoles = useMemo(
+    () =>
+      filterRows(roles, ["role", "scope", "status", "updated"], searchValue),
+    [searchValue]
+  );
+  const filteredUsers = useMemo(
+    () =>
+      filterRows(users, ["name", "email", "role", "status"], searchValue),
+    [searchValue]
+  );
+
+  return (
+    <section className="rounded-3xl bg-white p-8 shadow-[0_18px_50px_-38px_rgba(16,24,40,0.5)]">
+      <div className="flex flex-wrap items-start justify-between gap-6">
+        <div className="space-y-2">
+          <h2 className="text-2xl font-semibold text-[#10131a]">
+            User management
+          </h2>
+          <p className="max-w-lg text-sm text-[#5c647a]">
+            Centralize organizations, menus, roles, and people access across your
+            AIOps workspace.
+          </p>
+        </div>
+
+        <div className="flex flex-1 flex-wrap items-center justify-end gap-3">
+          <div className="flex items-center gap-2 rounded-2xl border border-[#e4e8f5] bg-[#f4f6fb] px-4 py-2 text-sm text-[#4f49e2] shadow-[0_10px_30px_-22px_rgba(79,73,226,0.45)]">
+            <Search className="h-4 w-4" />
+            <input
+              type="text"
+              value={searchValue}
+              onChange={(event) => setSearchValue(event.target.value)}
+              placeholder="Search organizations, roles, users..."
+              className="w-56 bg-transparent text-sm text-[#4f49e2] placeholder:text-[#7d86c6] focus:outline-none"
+            />
+          </div>
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 rounded-2xl border border-[#e4e8f5] bg-white px-4 py-2 text-sm font-semibold text-[#2f3443] shadow-[0_12px_26px_-20px_rgba(15,23,42,0.4)] transition hover:border-[#cfd6ee] hover:bg-[#f7f8fc]"
+          >
+            <Filter className="h-4 w-4 text-[#6b7391]" />
+            Filters
+          </button>
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 rounded-2xl bg-[#4f49e2] px-4 py-2 text-sm font-semibold text-white shadow-[0_18px_40px_-20px_rgba(79,73,226,0.65)] transition hover:bg-[#3d39c7]"
+          >
+            <Plus className="h-4 w-4" />
+            New user
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-8 flex flex-col gap-6 lg:flex-row lg:gap-8">
+        <div className="w-full lg:max-w-[280px] lg:self-stretch">
+          <div className="flex h-full min-h-[520px] flex-col rounded-3xl border border-[#e5e9f6] bg-gradient-to-b from-white via-white to-[#f2f4ff] p-4 shadow-[0_20px_50px_-36px_rgba(15,23,42,0.45)] lg:min-h-[calc(100vh-300px)]">
+            <div className="mb-4 rounded-2xl bg-white/80 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#8b92b5]">
+                Navigator
+              </p>
+              <p className="mt-1 text-sm font-semibold text-[#2d2f3a]">
+                Workspace menu
+              </p>
+              <p className="text-xs text-[#6f7893]">
+                Choose a management area.
+              </p>
+            </div>
+            <div
+              role="tablist"
+              className="flex flex-1 flex-col gap-2 rounded-2xl bg-[#f4f6fb] p-3"
+            >
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`relative inline-flex w-full items-center justify-between gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition ${
+                      isActive
+                        ? "bg-white text-[#2d2f3a] shadow-[0_14px_32px_-24px_rgba(15,23,42,0.55)]"
+                        : "text-[#6b7391] hover:bg-white/70 hover:text-[#2d2f3a]"
+                    }`}
+                  >
+                    {isActive ? (
+                      <span className="absolute left-0 top-1/2 h-8 w-1 -translate-y-1/2 rounded-r-full bg-[#4f49e2]" />
+                    ) : null}
+                    <span className="flex items-center gap-3">
+                      <span
+                        className={`flex h-9 w-9 items-center justify-center rounded-full ${
+                          isActive
+                            ? "bg-[#eef0ff] text-[#4f49e2]"
+                            : "bg-white text-[#6b7391]"
+                        }`}
+                      >
+                        <Icon className="h-4 w-4" />
+                      </span>
+                      {tab.label}
+                    </span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                        isActive
+                          ? "bg-[#eef0ff] text-[#4f49e2]"
+                          : "bg-white text-[#8b94b1]"
+                      }`}
+                    >
+                      {tab.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="hidden lg:block w-px self-stretch bg-[#e6e9f5]" />
+
+        <div className="flex-1 space-y-6">
+          <div className="grid gap-4 md:grid-cols-3">
+            {statsByTab[activeTab].map((stat) => (
+              <div
+                key={stat.label}
+                className="rounded-2xl border border-[#e7eaf5] bg-white px-5 py-4 shadow-[0_18px_40px_-30px_rgba(15,23,42,0.35)]"
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#8c96b6]">
+                  {stat.label}
+                </p>
+                <div className="mt-3 flex items-center justify-between">
+                  <p className="text-2xl font-semibold text-[#111827]">
+                    {stat.value}
+                  </p>
+                  <span className="rounded-full bg-[#f2f4ff] px-3 py-1 text-xs font-semibold text-[#4f49e2]">
+                    {stat.meta}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="overflow-hidden rounded-2xl border border-[#e7eaf5] bg-white">
+            <div className="flex items-center justify-between border-b border-[#eef1f8] px-6 py-4">
+              <div>
+                <h3 className="text-base font-semibold text-[#1c2233]">
+                  {activeTab === "organization" && "Organization directory"}
+                  {activeTab === "menu" && "Menu catalog"}
+                  {activeTab === "role" && "Role matrix"}
+                  {activeTab === "user" && "User roster"}
+                </h3>
+                <p className="text-xs text-[#7b859f]">
+                  {activeTab === "organization" &&
+                    "Manage tenant branding, plans, and onboarding status."}
+                  {activeTab === "menu" &&
+                    "Publish and organize navigation menus across workspaces."}
+                  {activeTab === "role" &&
+                    "Assign access scopes and responsibilities for each team."}
+                  {activeTab === "user" &&
+                    "Review invitations, activity, and access for every user."}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="rounded-xl border border-[#e4e8f5] bg-white px-3 py-2 text-xs font-semibold text-[#4f49e2] transition hover:bg-[#f2f4ff]"
+              >
+                View all
+              </button>
+            </div>
+
+            {activeTab === "organization" && (
+              <table className="w-full text-left text-sm">
+                <thead className="bg-[#f5f7fb] text-xs uppercase tracking-[0.16em] text-[#7c86a2]">
+                  <tr>
+                    <th className="px-6 py-3">Organization</th>
+                    <th className="px-6 py-3">Primary domain</th>
+                    <th className="px-6 py-3">Users</th>
+                    <th className="px-6 py-3">Plan</th>
+                    <th className="px-6 py-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredOrganizations.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={5}
+                        className="px-6 py-10 text-center text-sm text-[#7c86a2]"
+                      >
+                        No organizations match this search.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredOrganizations.map((org) => (
+                      <tr
+                        key={org.name}
+                        className="border-b border-[#eef1f8] last:border-0"
+                      >
+                        <td className="px-6 py-4 font-semibold text-[#1a1f2d]">
+                          {org.name}
+                        </td>
+                        <td className="px-6 py-4 text-[#5d657a]">
+                          {org.domain}
+                        </td>
+                        <td className="px-6 py-4 text-[#1a1f2d]">
+                          {org.users}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="rounded-full bg-[#f2f4ff] px-3 py-1 text-xs font-semibold text-[#4f49e2]">
+                            {org.plan}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span
+                            className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
+                              statusStyles[org.status]
+                            }`}
+                          >
+                            {org.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            )}
+
+            {activeTab === "menu" && (
+              <table className="w-full text-left text-sm">
+                <thead className="bg-[#f5f7fb] text-xs uppercase tracking-[0.16em] text-[#7c86a2]">
+                  <tr>
+                    <th className="px-6 py-3">Menu</th>
+                    <th className="px-6 py-3">Category</th>
+                    <th className="px-6 py-3">Items</th>
+                    <th className="px-6 py-3">Last updated</th>
+                    <th className="px-6 py-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredMenus.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={5}
+                        className="px-6 py-10 text-center text-sm text-[#7c86a2]"
+                      >
+                        No menus match this search.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredMenus.map((menu) => (
+                      <tr
+                        key={menu.name}
+                        className="border-b border-[#eef1f8] last:border-0"
+                      >
+                        <td className="px-6 py-4 font-semibold text-[#1a1f2d]">
+                          {menu.name}
+                        </td>
+                        <td className="px-6 py-4 text-[#5d657a]">
+                          {menu.category}
+                        </td>
+                        <td className="px-6 py-4 text-[#1a1f2d]">
+                          {menu.items}
+                        </td>
+                        <td className="px-6 py-4 text-[#5d657a]">
+                          {menu.lastUpdated}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span
+                            className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
+                              statusStyles[menu.status]
+                            }`}
+                          >
+                            {menu.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            )}
+
+            {activeTab === "role" && (
+              <table className="w-full text-left text-sm">
+                <thead className="bg-[#f5f7fb] text-xs uppercase tracking-[0.16em] text-[#7c86a2]">
+                  <tr>
+                    <th className="px-6 py-3">Role</th>
+                    <th className="px-6 py-3">Scope</th>
+                    <th className="px-6 py-3">Members</th>
+                    <th className="px-6 py-3">Last updated</th>
+                    <th className="px-6 py-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRoles.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={5}
+                        className="px-6 py-10 text-center text-sm text-[#7c86a2]"
+                      >
+                        No roles match this search.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredRoles.map((role) => (
+                      <tr
+                        key={role.role}
+                        className="border-b border-[#eef1f8] last:border-0"
+                      >
+                        <td className="px-6 py-4 font-semibold text-[#1a1f2d]">
+                          {role.role}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="rounded-full bg-[#f4f6fb] px-3 py-1 text-xs font-semibold text-[#5d657a]">
+                            {role.scope}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-[#1a1f2d]">
+                          {role.users}
+                        </td>
+                        <td className="px-6 py-4 text-[#5d657a]">
+                          {role.updated}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span
+                            className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
+                              statusStyles[role.status]
+                            }`}
+                          >
+                            {role.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            )}
+
+            {activeTab === "user" && (
+              <table className="w-full text-left text-sm">
+                <thead className="bg-[#f5f7fb] text-xs uppercase tracking-[0.16em] text-[#7c86a2]">
+                  <tr>
+                    <th className="px-6 py-3">Name</th>
+                    <th className="px-6 py-3">Email</th>
+                    <th className="px-6 py-3">Role</th>
+                    <th className="px-6 py-3">Last active</th>
+                    <th className="px-6 py-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredUsers.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={5}
+                        className="px-6 py-10 text-center text-sm text-[#7c86a2]"
+                      >
+                        No users match this search.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredUsers.map((user) => (
+                      <tr
+                        key={user.email}
+                        className="border-b border-[#eef1f8] last:border-0"
+                      >
+                        <td className="px-6 py-4 font-semibold text-[#1a1f2d]">
+                          {user.name}
+                        </td>
+                        <td className="px-6 py-4 text-[#5d657a]">
+                          {user.email}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="rounded-full bg-[#eef0ff] px-3 py-1 text-xs font-semibold text-[#4f49e2]">
+                            {user.role}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-[#5d657a]">
+                          {user.lastActive}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span
+                            className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
+                              statusStyles[user.status]
+                            }`}
+                          >
+                            {user.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}

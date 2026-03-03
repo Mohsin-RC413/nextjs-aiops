@@ -105,7 +105,7 @@ const navSections: NavSection[] = [
         label: "User management",
         id: "operations-user-management",
         icon: <Users className="h-5 w-5" />,
-        href: "#",
+        href: "/user-management",
       },
     ],
   },
