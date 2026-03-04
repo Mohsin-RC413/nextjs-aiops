@@ -354,7 +354,7 @@ export default function UserManagementPage() {
               <div className="absolute left-1/2 top-[8px] w-[200px] -translate-x-1/2 rounded-2xl bg-white px-3 py-3 shadow-[0_16px_28px_-22px_rgba(15,23,42,0.3)]">
                 <div className="flex items-center gap-2">
                   <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#eef0ff] text-[#4f49e2]">
-                    <ShieldCheck className="h-4 w-4" />
+                    <Building2 className="h-4 w-4" />
                   </span>
                   <div>
                     <p className="text-sm font-semibold text-[#10131a]">
@@ -366,6 +366,9 @@ export default function UserManagementPage() {
               </div>
 
               <div className="absolute left-1/2 top-[56px] h-[24px] w-px -translate-x-1/2 border-l-2 border-dashed border-[#cbd5f5]" />
+              <span className="absolute left-1/2 top-[62px] -translate-x-1/2 rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#7b84aa]">
+                governs
+              </span>
               <div className="absolute left-[15%] top-[80px] h-px w-[70%] border-t-2 border-dashed border-[#cbd5f5]" />
 
               {hierarchyOrganizations.map((orgName, orgIndex) => {
@@ -400,6 +403,12 @@ export default function UserManagementPage() {
                       className="absolute top-[164px] h-px w-[20%] border-t-2 border-dashed border-[#cbd5f5]"
                       style={{ left: `calc(${orgCenter} - 10%)` }}
                     />
+                    <span
+                      className="absolute top-[150px] -translate-x-1/2 rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#7b84aa]"
+                      style={{ left: orgCenter }}
+                    >
+                      has
+                    </span>
 
                     {relationshipUsers.map((user, userIndex) => {
                       const userOffset = hierarchyUserOffsets[userIndex];
@@ -434,6 +443,12 @@ export default function UserManagementPage() {
                             className="absolute top-[256px] h-[22px] w-px -translate-x-1/2 border-l-2 border-dashed border-[#f2cfa5]"
                             style={{ left: userCenter }}
                           />
+                          <span
+                            className="absolute top-[260px] -translate-x-1/2 rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#c07a31]"
+                            style={{ left: userCenter }}
+                          >
+                            assigned
+                          </span>
 
                           <div
                             className="absolute top-[282px] w-[128px] -translate-x-1/2 rounded-2xl bg-white px-3 py-3 shadow-[0_16px_28px_-22px_rgba(15,23,42,0.28)]"
