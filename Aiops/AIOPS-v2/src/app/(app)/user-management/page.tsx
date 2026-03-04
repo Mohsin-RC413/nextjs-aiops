@@ -9,7 +9,7 @@ import {
   ShieldCheck,
   Users2,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ElementType } from "react";
 
 type Organization = {
   name: string;
@@ -163,26 +163,119 @@ const statusStyles: Record<string, string> = {
   Invited: "bg-indigo-50 text-indigo-700 border-indigo-200",
 };
 
-const statsByTab = {
+type StatCard = {
+  label: string;
+  value: string;
+  meta: string;
+  icon: ElementType;
+  accent: string;
+  pill: string;
+};
+
+const statsByTab: Record<(typeof tabs)[number]["id"], StatCard[]> = {
   organization: [
-    { label: "Organizations", value: "3", meta: "1 onboarding" },
-    { label: "Total users", value: "123", meta: "+14 this month" },
-    { label: "Active plans", value: "2", meta: "Enterprise focus" },
+    {
+      label: "Organizations",
+      value: "3",
+      meta: "1 onboarding",
+      icon: Building2,
+      accent: "from-[#4f49e2]/22 via-transparent to-transparent",
+      pill: "bg-[#eef0ff] text-[#4f49e2]",
+    },
+    {
+      label: "Total users",
+      value: "123",
+      meta: "+14 this month",
+      icon: Users2,
+      accent: "from-[#0ea5e9]/22 via-transparent to-transparent",
+      pill: "bg-[#e6f6ff] text-[#0284c7]",
+    },
+    {
+      label: "Active plans",
+      value: "2",
+      meta: "Enterprise focus",
+      icon: ShieldCheck,
+      accent: "from-[#22c55e]/20 via-transparent to-transparent",
+      pill: "bg-[#e8f9ef] text-[#15803d]",
+    },
   ],
   menu: [
-    { label: "Menus", value: "8", meta: "2 in draft" },
-    { label: "Menu items", value: "46", meta: "Last 30 days" },
-    { label: "Last publish", value: "2 days", meta: "Stable release" },
+    {
+      label: "Menus",
+      value: "8",
+      meta: "2 in draft",
+      icon: LayoutGrid,
+      accent: "from-[#8b5cf6]/22 via-transparent to-transparent",
+      pill: "bg-[#f1ecff] text-[#6d28d9]",
+    },
+    {
+      label: "Menu items",
+      value: "46",
+      meta: "Last 30 days",
+      icon: Building2,
+      accent: "from-[#f97316]/22 via-transparent to-transparent",
+      pill: "bg-[#fff1e7] text-[#c2410c]",
+    },
+    {
+      label: "Last publish",
+      value: "2 days",
+      meta: "Stable release",
+      icon: ShieldCheck,
+      accent: "from-[#14b8a6]/22 via-transparent to-transparent",
+      pill: "bg-[#e6fffb] text-[#0f766e]",
+    },
   ],
   role: [
-    { label: "Roles", value: "6", meta: "1 archived" },
-    { label: "Scoped roles", value: "4", meta: "Ops + Insights" },
-    { label: "Avg members", value: "8", meta: "Balanced coverage" },
+    {
+      label: "Roles",
+      value: "6",
+      meta: "1 archived",
+      icon: ShieldCheck,
+      accent: "from-[#ec4899]/20 via-transparent to-transparent",
+      pill: "bg-[#ffe7f3] text-[#be185d]",
+    },
+    {
+      label: "Scoped roles",
+      value: "4",
+      meta: "Ops + Insights",
+      icon: LayoutGrid,
+      accent: "from-[#06b6d4]/20 via-transparent to-transparent",
+      pill: "bg-[#e6fbff] text-[#0e7490]",
+    },
+    {
+      label: "Avg members",
+      value: "8",
+      meta: "Balanced coverage",
+      icon: Users2,
+      accent: "from-[#f59e0b]/22 via-transparent to-transparent",
+      pill: "bg-[#fff4df] text-[#b45309]",
+    },
   ],
   user: [
-    { label: "Total users", value: "42", meta: "82% active" },
-    { label: "Pending invites", value: "5", meta: "Expires in 7 days" },
-    { label: "Suspended", value: "2", meta: "Requires review" },
+    {
+      label: "Total users",
+      value: "42",
+      meta: "82% active",
+      icon: Users2,
+      accent: "from-[#4f49e2]/22 via-transparent to-transparent",
+      pill: "bg-[#eef0ff] text-[#4f49e2]",
+    },
+    {
+      label: "Pending invites",
+      value: "5",
+      meta: "Expires in 7 days",
+      icon: LayoutGrid,
+      accent: "from-[#f97316]/22 via-transparent to-transparent",
+      pill: "bg-[#fff1e7] text-[#c2410c]",
+    },
+    {
+      label: "Suspended",
+      value: "2",
+      meta: "Requires review",
+      icon: ShieldCheck,
+      accent: "from-[#ef4444]/20 via-transparent to-transparent",
+      pill: "bg-[#ffe9e9] text-[#b91c1c]",
+    },
   ],
 } as const;
 
@@ -340,16 +433,29 @@ export default function UserManagementPage() {
             {statsByTab[activeTab].map((stat) => (
               <div
                 key={stat.label}
-                className="rounded-2xl border border-[#e7eaf5] bg-white px-5 py-4 shadow-[0_18px_40px_-30px_rgba(15,23,42,0.35)]"
+                className="relative overflow-hidden rounded-2xl border border-[#e7eaf5] bg-white px-5 py-4 shadow-[0_18px_40px_-30px_rgba(15,23,42,0.35)]"
               >
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#8c96b6]">
-                  {stat.label}
-                </p>
-                <div className="mt-3 flex items-center justify-between">
-                  <p className="text-2xl font-semibold text-[#111827]">
-                    {stat.value}
-                  </p>
-                  <span className="rounded-full bg-[#f2f4ff] px-3 py-1 text-xs font-semibold text-[#4f49e2]">
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none absolute -right-12 -top-12 h-28 w-28 rounded-full bg-gradient-to-br ${stat.accent}`}
+                />
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#8c96b6]">
+                      {stat.label}
+                    </p>
+                    <p className="mt-3 text-2xl font-semibold text-[#111827]">
+                      {stat.value}
+                    </p>
+                  </div>
+                  <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white shadow-[0_10px_24px_-16px_rgba(15,23,42,0.45)]">
+                    <stat.icon className="h-5 w-5 text-[#4f49e2]" />
+                  </span>
+                </div>
+                <div className="mt-4">
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-semibold ${stat.pill}`}
+                  >
                     {stat.meta}
                   </span>
                 </div>
