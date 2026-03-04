@@ -51,13 +51,13 @@ const tabs = [
 ] as const;
 
 const superAdminName = "Royal Cyber";
-const hierarchyOrganizations = ["Royal Cyber", "Org2", "Org3"] as const;
-const hierarchyOrgCenters = [12, 50, 88] as const;
-const hierarchyUserOffsets = [-5, 0, 5] as const;
+const hierarchyOrganizations = ["Org 1", "Org 2", "Org 3"] as const;
+const hierarchyOrgCenters = [15, 50, 85] as const;
+const hierarchyUserOffsets = [-10, 0, 10] as const;
 const relationshipUsers = [
-  { name: "Alice Admin", role: "Platform Admin" },
-  { name: "John Doe", role: "Operations Lead" },
-  { name: "Kiran Patel", role: "Read-only Analyst" },
+  { name: "User 1", role: "Platform Admin" },
+  { name: "User 2", role: "Operations Lead" },
+  { name: "User 3", role: "Read-only Analyst" },
 ] as const;
 
 const organizations: Organization[] = [
@@ -366,7 +366,7 @@ export default function UserManagementPage() {
               </div>
 
               <div className="absolute left-1/2 top-[56px] h-[24px] w-px -translate-x-1/2 border-l-2 border-dashed border-[#cbd5f5]" />
-              <div className="absolute left-[12%] top-[80px] h-px w-[76%] border-t-2 border-dashed border-[#cbd5f5]" />
+              <div className="absolute left-[15%] top-[80px] h-px w-[70%] border-t-2 border-dashed border-[#cbd5f5]" />
 
               {hierarchyOrganizations.map((orgName, orgIndex) => {
                 const orgCenter = `${hierarchyOrgCenters[orgIndex]}%`;
@@ -397,8 +397,8 @@ export default function UserManagementPage() {
                     </div>
 
                     <div
-                      className="absolute top-[164px] h-px w-[10%] border-t-2 border-dashed border-[#cbd5f5]"
-                      style={{ left: `calc(${orgCenter} - 5%)` }}
+                      className="absolute top-[164px] h-px w-[20%] border-t-2 border-dashed border-[#cbd5f5]"
+                      style={{ left: `calc(${orgCenter} - 10%)` }}
                     />
 
                     {relationshipUsers.map((user, userIndex) => {
@@ -414,7 +414,7 @@ export default function UserManagementPage() {
                           />
 
                           <div
-                            className="absolute top-[188px] w-[140px] -translate-x-1/2 rounded-2xl bg-white px-3 py-3 shadow-[0_16px_28px_-22px_rgba(15,23,42,0.28)]"
+                            className="absolute top-[188px] w-[128px] -translate-x-1/2 rounded-2xl bg-white px-3 py-3 shadow-[0_16px_28px_-22px_rgba(15,23,42,0.28)]"
                             style={{ left: userCenter }}
                           >
                             <div className="flex items-center gap-2">
@@ -436,7 +436,7 @@ export default function UserManagementPage() {
                           />
 
                           <div
-                            className="absolute top-[282px] w-[140px] -translate-x-1/2 rounded-2xl bg-white px-3 py-3 shadow-[0_16px_28px_-22px_rgba(15,23,42,0.28)]"
+                            className="absolute top-[282px] w-[128px] -translate-x-1/2 rounded-2xl bg-white px-3 py-3 shadow-[0_16px_28px_-22px_rgba(15,23,42,0.28)]"
                             style={{ left: userCenter }}
                           >
                             <div className="flex items-center gap-2">
