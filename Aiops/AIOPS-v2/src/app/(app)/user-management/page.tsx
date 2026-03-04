@@ -50,6 +50,17 @@ const tabs = [
   { id: "user", label: "User", icon: Users2, count: 42 },
 ] as const;
 
+const relationshipUsers = [
+  { name: "Alice Admin", role: "Platform Admin" },
+  { name: "John Doe", role: "Operations Lead" },
+  { name: "Kiran Patel", role: "Read-only Analyst" },
+];
+const relationshipRoles = [
+  "Platform Admin",
+  "Operations Lead",
+  "Read-only Analyst",
+];
+
 const organizations: Organization[] = [
   {
     name: "Royal Cyber",
@@ -322,7 +333,88 @@ export default function UserManagementPage() {
 
   return (
     <section className="rounded-3xl bg-white p-8 shadow-[0_18px_50px_-38px_rgba(16,24,40,0.5)]">
-      <div className="flex flex-wrap items-start justify-between gap-6">
+      <div className="rounded-3xl bg-transparent">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="max-w-xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#7b84aa]">
+              Access Hierarchy
+            </p>
+            <h3 className="mt-2 text-xl font-semibold text-[#10131a]">
+              Tenant to Identity and Permission Role Mapping
+            </h3>
+            <p className="mt-2 text-sm text-[#5f6784]">
+              Top-down control graph showing how people inherit role permissions
+              from the organization context.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-6 flex justify-center">
+          <div className="relative h-[420px] w-full max-w-[980px]">
+            <div className="absolute left-1/2 top-[22px] w-[190px] -translate-x-1/2 rounded-2xl bg-white px-3 py-3 shadow-[0_16px_28px_-22px_rgba(15,23,42,0.3)]">
+              <div className="flex items-center gap-2">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#eef0ff] text-[#4f49e2]">
+                  <Building2 className="h-4 w-4" />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-[#10131a]">Royal Cyber</p>
+                  <p className="text-[11px] text-[#6b7391]">Organization</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="absolute left-[18%] top-[92px] h-[100px] w-[32%] border-2 border-dashed border-[#cbd5f5] border-b-0 border-r-0 rounded-[140px] rotate-[-6deg]" />
+            <div className="absolute left-[50%] top-[92px] h-[100px] w-[32%] border-2 border-dashed border-[#cbd5f5] border-b-0 border-l-0 rounded-[140px] rotate-[6deg]" />
+            <div className="absolute left-1/2 top-[96px] h-[96px] w-[96px] -translate-x-1/2 border-2 border-dashed border-[#cbd5f5] border-b-0 border-r-0 rounded-[120px] rotate-[-45deg]" />
+
+            {relationshipUsers.map((person, index) => (
+              <div
+                key={person.name}
+                className="absolute top-[170px] w-[190px] -translate-x-1/2 rounded-2xl bg-white px-3 py-3 shadow-[0_16px_28px_-22px_rgba(15,23,42,0.28)]"
+                style={{ left: `${20 + index * 30}%` }}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#e8f9ef] text-[#15803d]">
+                    <Users2 className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-[#10131a]">{person.name}</p>
+                    <p className="text-[11px] text-[#5f6784]">User</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {relationshipUsers.map((_, index) => (
+              <div
+                key={`curl-${index}`}
+                className="absolute top-[232px] h-[70px] w-[70px] border-2 border-dashed border-[#f2cfa5] border-l-0 border-t-0 rounded-[70px]"
+                style={{ left: `calc(${20 + index * 30}% - 22px)` }}
+              />
+            ))}
+
+            {relationshipRoles.map((roleLabel, index) => (
+              <div
+                key={roleLabel}
+                className="absolute top-[310px] w-[190px] -translate-x-1/2 rounded-2xl bg-white px-3 py-3 shadow-[0_16px_28px_-22px_rgba(15,23,42,0.28)]"
+                style={{ left: `${20 + index * 30}%` }}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#fff1e7] text-[#c2410c]">
+                    <ShieldCheck className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-[#10131a]">{roleLabel}</p>
+                    <p className="text-[11px] text-[#6b4e2d]">Role</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+          </div>
+        </div>
+      </div>
+      <div className="mt-8 flex flex-wrap items-start justify-between gap-6">
         <div className="space-y-2">
           <h2 className="text-2xl font-semibold text-[#10131a]">
             User management
