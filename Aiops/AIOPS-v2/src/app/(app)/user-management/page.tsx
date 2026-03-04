@@ -50,6 +50,7 @@ const tabs = [
   { id: "user", label: "User", icon: Users2, count: 42 },
 ] as const;
 
+const superAdminName = "Royal Cyber";
 const relationshipUsers = [
   { name: "Alice Admin", role: "Platform Admin" },
   { name: "John Doe", role: "Operations Lead" },
@@ -350,8 +351,24 @@ export default function UserManagementPage() {
         </div>
 
         <div className="mt-6 flex justify-center">
-          <div className="relative h-[420px] w-full max-w-[980px]">
-            <div className="absolute left-1/2 top-[22px] w-[190px] -translate-x-1/2 rounded-2xl bg-white px-3 py-3 shadow-[0_16px_28px_-22px_rgba(15,23,42,0.3)]">
+          <div className="relative h-[440px] w-full max-w-[980px]">
+            <div className="absolute left-1/2 top-[8px] w-[200px] -translate-x-1/2 rounded-2xl bg-white px-3 py-3 shadow-[0_16px_28px_-22px_rgba(15,23,42,0.3)]">
+              <div className="flex items-center gap-2">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#eef0ff] text-[#4f49e2]">
+                  <ShieldCheck className="h-4 w-4" />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-[#10131a]">
+                    {superAdminName}
+                  </p>
+                  <p className="text-[11px] text-[#6b7391]">Super admin</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="absolute left-1/2 top-[56px] h-[28px] w-px -translate-x-1/2 border-l-2 border-dashed border-[#cbd5f5]" />
+
+            <div className="absolute left-1/2 top-[96px] w-[190px] -translate-x-1/2 rounded-2xl bg-white px-3 py-3 shadow-[0_16px_28px_-22px_rgba(15,23,42,0.3)]">
               <div className="flex items-center gap-2">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#eef0ff] text-[#4f49e2]">
                   <Building2 className="h-4 w-4" />
@@ -363,14 +380,19 @@ export default function UserManagementPage() {
               </div>
             </div>
 
-            <div className="absolute left-[18%] top-[92px] h-[100px] w-[32%] border-2 border-dashed border-[#cbd5f5] border-b-0 border-r-0 rounded-[140px] rotate-[-6deg]" />
-            <div className="absolute left-[50%] top-[92px] h-[100px] w-[32%] border-2 border-dashed border-[#cbd5f5] border-b-0 border-l-0 rounded-[140px] rotate-[6deg]" />
-            <div className="absolute left-1/2 top-[96px] h-[96px] w-[96px] -translate-x-1/2 border-2 border-dashed border-[#cbd5f5] border-b-0 border-r-0 rounded-[120px] rotate-[-45deg]" />
+            <div className="absolute left-[20%] top-[156px] h-px w-[60%] border-t-2 border-dashed border-[#cbd5f5]" />
+            {relationshipUsers.map((_, index) => (
+              <div
+                key={`org-drop-${index}`}
+                className="absolute top-[156px] h-[36px] w-px -translate-x-1/2 border-l-2 border-dashed border-[#cbd5f5]"
+                style={{ left: `${20 + index * 30}%` }}
+              />
+            ))}
 
             {relationshipUsers.map((person, index) => (
               <div
                 key={person.name}
-                className="absolute top-[170px] w-[190px] -translate-x-1/2 rounded-2xl bg-white px-3 py-3 shadow-[0_16px_28px_-22px_rgba(15,23,42,0.28)]"
+                className="absolute top-[210px] w-[190px] -translate-x-1/2 rounded-2xl bg-white px-3 py-3 shadow-[0_16px_28px_-22px_rgba(15,23,42,0.28)]"
                 style={{ left: `${20 + index * 30}%` }}
               >
                 <div className="flex items-center gap-2">
@@ -387,16 +409,16 @@ export default function UserManagementPage() {
 
             {relationshipUsers.map((_, index) => (
               <div
-                key={`curl-${index}`}
-                className="absolute top-[232px] h-[70px] w-[70px] border-2 border-dashed border-[#f2cfa5] border-l-0 border-t-0 rounded-[70px]"
-                style={{ left: `calc(${20 + index * 30}% - 22px)` }}
+                key={`user-role-${index}`}
+                className="absolute top-[288px] h-[28px] w-px -translate-x-1/2 border-l-2 border-dashed border-[#f2cfa5]"
+                style={{ left: `${20 + index * 30}%` }}
               />
             ))}
 
             {relationshipRoles.map((roleLabel, index) => (
               <div
                 key={roleLabel}
-                className="absolute top-[310px] w-[190px] -translate-x-1/2 rounded-2xl bg-white px-3 py-3 shadow-[0_16px_28px_-22px_rgba(15,23,42,0.28)]"
+                className="absolute top-[320px] w-[190px] -translate-x-1/2 rounded-2xl bg-white px-3 py-3 shadow-[0_16px_28px_-22px_rgba(15,23,42,0.28)]"
                 style={{ left: `${20 + index * 30}%` }}
               >
                 <div className="flex items-center gap-2">
