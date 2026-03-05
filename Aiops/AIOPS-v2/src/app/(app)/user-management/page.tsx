@@ -517,7 +517,7 @@ export default function UserManagementPage() {
 
       <div className="mt-8 flex flex-col gap-6 lg:flex-row lg:gap-8">
         <div className="w-full lg:max-w-[280px] lg:self-stretch">
-          <div className="flex h-full min-h-[520px] flex-col rounded-3xl border border-[#e5e9f6] bg-gradient-to-b from-white via-white to-[#f2f4ff] p-4 shadow-[0_20px_50px_-36px_rgba(15,23,42,0.45)] lg:min-h-[calc(100vh-300px)]">
+          <div className="flex h-full min-h-[520px] flex-col rounded-3xl bg-gradient-to-b from-white via-white to-[#f2f4ff] p-4 shadow-[0_20px_50px_-36px_rgba(15,23,42,0.45)] lg:min-h-[calc(100vh-300px)]">
             <div className="mb-4 rounded-2xl bg-white/80 px-4 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#8b92b5]">
                 Navigator
