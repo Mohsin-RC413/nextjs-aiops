@@ -543,7 +543,7 @@ export default function UserManagementPage() {
                     role="tab"
                     aria-selected={isActive}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`relative inline-flex w-full items-center justify-between gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition ${
+                    className={`relative inline-flex h-full min-h-0 flex-1 w-full items-center justify-between gap-2 rounded-xl px-4 text-sm font-semibold transition ${
                       isActive
                         ? "bg-white text-[#2d2f3a] shadow-[0_14px_32px_-24px_rgba(15,23,42,0.55)]"
                         : "text-[#6b7391] hover:bg-white/70 hover:text-[#2d2f3a]"
