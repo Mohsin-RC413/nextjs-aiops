@@ -9,6 +9,7 @@ import {
   Loader2,
   RefreshCw,
   Search,
+  Trash2,
   X,
   Zap,
 } from "lucide-react";
@@ -43,6 +44,8 @@ const PROVIDER_MODELS = {
 
 type ProviderKey = keyof typeof PROVIDER_MODELS;
 type SelectOption = { value: string; label: string; iconSrc?: string };
+const SORTABLE_HEADERS = ["model_id", "provider", "created_at"] as const;
+type SortableHeader = (typeof SORTABLE_HEADERS)[number];
 
 type RoundedSelectProps = {
   value: string;
@@ -124,6 +127,50 @@ const buildModelId = (provider: string, name: string) =>
 
 const toLabel = (value: string) =>
   value.length > 0 ? value[0].toUpperCase() + value.slice(1) : value;
+
+const formatHeaderLabel = (header: string) =>
+  header
+    .split("_")
+    .map((part) => {
+      const lower = part.toLowerCase();
+      if (lower === "id") {
+        return "ID";
+      }
+      return part.length > 0
+        ? part[0].toUpperCase() + part.slice(1).toLowerCase()
+        : part;
+    })
+    .join(" ");
+
+const isSortableHeader = (header: string): header is SortableHeader =>
+  (SORTABLE_HEADERS as readonly string[]).includes(header);
+
+const formatDateTime = (rawValue: string | number | boolean | null | undefined) => {
+  const value = formatCellValue(rawValue);
+  if (value === "-") {
+    return value;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+};
+
+const getProviderIconSrc = (providerValue: string | number | boolean | null | undefined) => {
+  const normalized = formatCellValue(providerValue).toLowerCase();
+  return (Object.keys(PROVIDER_MODELS) as ProviderKey[]).includes(
+    normalized as ProviderKey
+  )
+    ? `/img/${normalized}.webp`
+    : null;
+};
 
 function RoundedSelect({
   value,
@@ -246,6 +293,8 @@ export default function LLMManagementPage() {
   const [hiddenHeaders, setHiddenHeaders] = useState<Record<string, boolean>>(
     {}
   );
+  const [sortKey, setSortKey] = useState<SortableHeader>("created_at");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<ProviderKey | "">(
     ""
@@ -255,6 +304,9 @@ export default function LLMManagementPage() {
   const [apiKey, setApiKey] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<LLMRecord | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const [toastMessage, setToastMessage] = useState("");
   const [isToastVisible, setIsToastVisible] = useState(false);
   const llmsRef = useRef<LLMRecord[]>([]);
@@ -438,6 +490,61 @@ export default function LLMManagementPage() {
     }
   };
 
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget || isDeleting) {
+      return;
+    }
+
+    const modelId = String(deleteTarget.model_id ?? "").trim();
+    if (!modelId || modelId === "-") {
+      setDeleteError("Model ID is missing. Unable to delete this LLM.");
+      return;
+    }
+
+    setIsDeleting(true);
+    setDeleteError("");
+
+    try {
+      const response = await fetch(
+        `${LLM_API_BASE}/llms/${encodeURIComponent(modelId)}`,
+        {
+          method: "DELETE",
+          headers: { accept: "application/json" },
+        }
+      );
+
+      let data: unknown = null;
+      try {
+        data = await response.json();
+      } catch {
+        data = null;
+      }
+
+      const isDeleteOk =
+        response.ok &&
+        Boolean(
+          data &&
+            typeof data === "object" &&
+            "ok" in data &&
+            (data as { ok?: unknown }).ok === true
+        );
+
+      if (!isDeleteOk) {
+        setDeleteError(getErrorMessage(data, "Unable to delete LLM."));
+        return;
+      }
+
+      setDeleteTarget(null);
+      setToastMessage("LLM deleted successfully.");
+      setIsToastVisible(true);
+      await loadLlms({ refresh: true });
+    } catch {
+      setDeleteError("Unable to delete LLM.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const tableHeaders = useMemo(() => {
     const headerSet = new Set<string>();
     llms.forEach((item) => {
@@ -502,6 +609,15 @@ export default function LLMManagementPage() {
     }));
   };
 
+  const handleSort = (header: SortableHeader) => {
+    if (sortKey === header) {
+      setSortDirection((previous) => (previous === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortKey(header);
+    setSortDirection(header === "created_at" ? "desc" : "asc");
+  };
+
   const filteredLlms = useMemo(() => {
     const normalizedSearch = searchValue.trim().toLowerCase();
     if (!normalizedSearch) {
@@ -513,6 +629,33 @@ export default function LLMManagementPage() {
       )
     );
   }, [llms, searchValue]);
+
+  const sortedLlms = useMemo(() => {
+    const rows = [...filteredLlms];
+    rows.sort((left, right) => {
+      const leftRaw = left[sortKey];
+      const rightRaw = right[sortKey];
+
+      if (sortKey === "created_at") {
+        const leftTime = new Date(formatCellValue(leftRaw)).getTime();
+        const rightTime = new Date(formatCellValue(rightRaw)).getTime();
+        const leftSafe = Number.isNaN(leftTime) ? 0 : leftTime;
+        const rightSafe = Number.isNaN(rightTime) ? 0 : rightTime;
+        return sortDirection === "asc"
+          ? leftSafe - rightSafe
+          : rightSafe - leftSafe;
+      }
+
+      const leftText = formatCellValue(leftRaw);
+      const rightText = formatCellValue(rightRaw);
+      const compare = leftText.localeCompare(rightText, undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
+      return sortDirection === "asc" ? compare : -compare;
+    });
+    return rows;
+  }, [filteredLlms, sortDirection, sortKey]);
 
   const { totalCount, providerCount, describedCount } = useMemo(() => {
     const total = llms.length;
@@ -696,7 +839,7 @@ export default function LLMManagementPage() {
                             className="h-4 w-4 rounded border-[#d1d5db] text-[#4f49e2] focus:ring-[#c7c4f7]"
                           />
                           <span className="truncate font-medium uppercase tracking-[0.06em]">
-                            {header}
+                            {formatHeaderLabel(header)}
                           </span>
                         </label>
                       );
@@ -708,7 +851,7 @@ export default function LLMManagementPage() {
           </div>
         </div>
 
-        <div className="mt-6 overflow-hidden rounded-2xl border border-[#eef1f7]">
+        <div className="mt-6 overflow-x-auto rounded-2xl border border-[#eef1f7]">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center gap-3 bg-white px-6 py-12 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#eef2ff] text-[#4f49e2] shadow-[0_12px_24px_-20px_rgba(79,73,226,0.8)]">
@@ -726,7 +869,7 @@ export default function LLMManagementPage() {
               </p>
               <p className="text-sm text-[#6b7280]">{loadError}</p>
             </div>
-          ) : visibleHeaders.length === 0 || filteredLlms.length === 0 ? (
+          ) : visibleHeaders.length === 0 || sortedLlms.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 bg-white px-6 py-12 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#eef2ff] text-[#4f49e2] shadow-[0_12px_24px_-20px_rgba(79,73,226,0.8)]">
                 <Bot className="h-6 w-6" />
@@ -736,48 +879,134 @@ export default function LLMManagementPage() {
               </p>
             </div>
           ) : (
-            <>
+            <div className="min-w-[1100px]">
               <div
-                className="grid bg-[#f3f6fb] px-4 py-3 text-xs font-semibold text-[#111827]"
+                className="sticky top-0 z-10 grid bg-[#f3f6fb] px-4 py-3 text-xs font-semibold text-[#111827]"
                 style={{
-                  gridTemplateColumns: `repeat(${visibleHeaders.length}, minmax(0, 1fr))`,
+                  gridTemplateColumns: `repeat(${visibleHeaders.length}, minmax(0, 1fr)) 96px`,
                 }}
               >
-                {visibleHeaders.map((header) => (
-                  <span key={header} className="uppercase tracking-[0.08em]">
-                    {header}
-                  </span>
-                ))}
+                {visibleHeaders.map((header) => {
+                  if (!isSortableHeader(header)) {
+                    return (
+                      <span key={header} className="uppercase tracking-[0.08em]">
+                        {formatHeaderLabel(header)}
+                      </span>
+                    );
+                  }
+
+                  const isActiveSort = sortKey === header;
+                  return (
+                    <button
+                      key={header}
+                      type="button"
+                      onClick={() => handleSort(header)}
+                      className="inline-flex items-center gap-1 text-left uppercase tracking-[0.08em] text-[#111827] transition hover:text-[#4f49e2]"
+                    >
+                      {formatHeaderLabel(header)}
+                      <ChevronDown
+                        className={`h-3.5 w-3.5 transition ${
+                          isActiveSort
+                            ? `${sortDirection === "asc" ? "rotate-180" : ""} text-[#4f49e2]`
+                            : "text-[#a3aed0]"
+                        }`}
+                      />
+                    </button>
+                  );
+                })}
+                <span className="text-right uppercase tracking-[0.08em]">
+                  Action
+                </span>
               </div>
               <div className="divide-y divide-[#eef1f7] bg-white">
-                {filteredLlms.map((item, index) => {
+                {sortedLlms.map((item, index) => {
                   const rowKey = `${formatCellValue(item.model_id)}-${index}`;
+                  const modelId = formatCellValue(item.model_id);
                   return (
                     <div
-                    key={rowKey}
-                    className="grid items-center px-4 py-4 text-sm text-[#2b3341]"
-                    style={{
-                      gridTemplateColumns: `repeat(${visibleHeaders.length}, minmax(0, 1fr))`,
-                    }}
-                  >
-                      {visibleHeaders.map((header, headerIndex) => (
-                        <span
-                          key={`${header}-${index}`}
-                          className={
-                            header === "model_id"
-                              ? "break-all whitespace-normal font-semibold text-[#1c2330]"
-                              : `${headerIndex === 0 ? "font-semibold text-[#1c2330]" : "text-[#2b3341]"} truncate`
-                          }
-                          title={formatCellValue(item[header])}
+                      key={rowKey}
+                      className="grid items-center px-4 py-4 text-sm text-[#2b3341] transition-colors hover:bg-[#f8f9fd]"
+                      style={{
+                        gridTemplateColumns: `repeat(${visibleHeaders.length}, minmax(0, 1fr)) 96px`,
+                      }}
+                    >
+                      {visibleHeaders.map((header, headerIndex) => {
+                        if (header === "model_id") {
+                          return (
+                            <span
+                              key={`${header}-${index}`}
+                              className="max-w-[360px] truncate font-semibold text-[#1c2330]"
+                              title={modelId}
+                            >
+                              {modelId}
+                            </span>
+                          );
+                        }
+
+                        if (header === "provider") {
+                          const providerValue = formatCellValue(item[header]);
+                          const providerIcon = getProviderIconSrc(item[header]);
+                          return (
+                            <span key={`${header}-${index}`}>
+                              <span className="inline-flex max-w-full items-center gap-2 rounded-full bg-[#f4f6fb] px-2.5 py-1">
+                                {providerIcon ? (
+                                  <Image
+                                    src={providerIcon}
+                                    alt={`${providerValue} logo`}
+                                    width={16}
+                                    height={16}
+                                    className="h-4 w-4 object-contain"
+                                  />
+                                ) : null}
+                                <span className="truncate">{providerValue}</span>
+                              </span>
+                            </span>
+                          );
+                        }
+
+                        if (header === "created_at") {
+                          const rawValue = formatCellValue(item[header]);
+                          const formattedDate = formatDateTime(item[header]);
+                          return (
+                            <span
+                              key={`${header}-${index}`}
+                              className={`${headerIndex === 0 ? "font-semibold text-[#1c2330]" : "text-[#2b3341]"} truncate`}
+                              title={`${formattedDate}${rawValue !== "-" ? ` (${rawValue})` : ""}`}
+                            >
+                              {formattedDate}
+                            </span>
+                          );
+                        }
+
+                        return (
+                          <span
+                            key={`${header}-${index}`}
+                            className={`${headerIndex === 0 ? "font-semibold text-[#1c2330]" : "text-[#2b3341]"} truncate`}
+                            title={formatCellValue(item[header])}
+                          >
+                            {formatCellValue(item[header])}
+                          </span>
+                        );
+                      })}
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDeleteTarget(item);
+                            setDeleteError("");
+                          }}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ffe4e6] text-[#ef4444] transition hover:bg-[#fecdd3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ef4444]/40"
+                          aria-label={`Delete ${modelId}`}
+                          title={`Delete ${modelId}`}
                         >
-                          {formatCellValue(item[header])}
-                        </span>
-                      ))}
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
               </div>
-            </>
+            </div>
           )}
         </div>
       </section>
@@ -892,6 +1121,70 @@ export default function LLMManagementPage() {
               >
                 {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 {isCreating ? "Creating..." : "Create LLM"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {deleteTarget ? (
+        <div className="fixed inset-0 z-[76] flex items-center justify-center bg-black/30 px-4 py-8">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_-30px_rgba(15,23,42,0.6)]">
+            <div className="flex items-center justify-between border-b border-[#eef1f7] px-6 py-4">
+              <h4 className="text-lg font-semibold text-[#111827]">Delete LLM</h4>
+              <button
+                type="button"
+                onClick={() => {
+                  if (isDeleting) {
+                    return;
+                  }
+                  setDeleteTarget(null);
+                  setDeleteError("");
+                }}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f3f4f6] text-[#111827]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="px-6 py-5">
+              <p className="text-sm text-[#374151]">
+                Are you sure you want to delete this LLM?
+              </p>
+              <p className="mt-2 break-all text-sm font-semibold text-[#111827]">
+                {formatCellValue(deleteTarget.model_id)}
+              </p>
+              {deleteError ? (
+                <p className="mt-3 text-sm font-medium text-[#dc2626]">
+                  {deleteError}
+                </p>
+              ) : null}
+            </div>
+            <div className="flex items-center justify-end gap-3 border-t border-[#eef1f7] px-6 py-4">
+              <button
+                type="button"
+                onClick={() => {
+                  if (isDeleting) {
+                    return;
+                  }
+                  setDeleteTarget(null);
+                  setDeleteError("");
+                }}
+                className="rounded-xl border border-[#e5e7eb] px-5 py-2 text-sm font-semibold text-[#374151]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className={`inline-flex items-center gap-2 rounded-xl px-5 py-2 text-sm font-semibold text-white ${
+                  isDeleting
+                    ? "cursor-not-allowed bg-[#fca5a5]"
+                    : "bg-[#ef4444] shadow-[0_10px_24px_-18px_rgba(239,68,68,0.8)] hover:bg-[#dc2626]"
+                }`}
+              >
+                {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {isDeleting ? "Deleting..." : "Delete"}
               </button>
             </div>
           </div>
