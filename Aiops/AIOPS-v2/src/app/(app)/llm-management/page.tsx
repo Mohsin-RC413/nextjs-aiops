@@ -242,6 +242,10 @@ export default function LLMManagementPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchValue, setSearchValue] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [isColumnMenuOpen, setIsColumnMenuOpen] = useState(false);
+  const [hiddenHeaders, setHiddenHeaders] = useState<Record<string, boolean>>(
+    {}
+  );
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<ProviderKey | "">(
     ""
@@ -255,6 +259,7 @@ export default function LLMManagementPage() {
   const [isToastVisible, setIsToastVisible] = useState(false);
   const llmsRef = useRef<LLMRecord[]>([]);
   const requestIdRef = useRef(0);
+  const columnMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     llmsRef.current = llms;
@@ -453,6 +458,50 @@ export default function LLMManagementPage() {
     return [...ordered, ...extras];
   }, [llms]);
 
+  useEffect(() => {
+    setHiddenHeaders((previous) => {
+      const next: Record<string, boolean> = {};
+      tableHeaders.forEach((header) => {
+        if (previous[header]) {
+          next[header] = true;
+        }
+      });
+      return next;
+    });
+  }, [tableHeaders]);
+
+  useEffect(() => {
+    if (!isColumnMenuOpen) {
+      return;
+    }
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        columnMenuRef.current &&
+        !columnMenuRef.current.contains(event.target as Node)
+      ) {
+        setIsColumnMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isColumnMenuOpen]);
+
+  const visibleHeaders = useMemo(
+    () => tableHeaders.filter((header) => !hiddenHeaders[header]),
+    [tableHeaders, hiddenHeaders]
+  );
+
+  const handleToggleHeader = (header: string) => {
+    const currentlyVisible = visibleHeaders.includes(header);
+    if (currentlyVisible && visibleHeaders.length === 1) {
+      return;
+    }
+    setHiddenHeaders((previous) => ({
+      ...previous,
+      [header]: !previous[header],
+    }));
+  };
+
   const filteredLlms = useMemo(() => {
     const normalizedSearch = searchValue.trim().toLowerCase();
     if (!normalizedSearch) {
@@ -598,21 +647,64 @@ export default function LLMManagementPage() {
             </span>
           </div>
 
-          <div
-            className={`flex items-center gap-2 rounded-xl bg-[#eef2ff] px-4 py-2 text-sm text-[#4f49e2] transition-all duration-200 ${
-              isSearchFocused ? "w-72" : "w-52"
-            }`}
-          >
-            <Search className="h-4 w-4" />
-            <input
-              type="text"
-              value={searchValue}
-              onChange={(event) => setSearchValue(event.target.value)}
-              placeholder="Search Models.."
-              onFocus={() => setIsSearchFocused(true)}
-              onBlur={() => setIsSearchFocused(false)}
-              className="w-full bg-transparent text-sm text-[#4f49e2] placeholder:text-[#4f49e2] focus:outline-none"
-            />
+          <div className="flex flex-wrap items-center gap-3">
+            <div
+              className={`flex items-center gap-2 rounded-xl bg-[#eef2ff] px-4 py-2 text-sm text-[#4f49e2] transition-all duration-200 ${
+                isSearchFocused ? "w-72" : "w-52"
+              }`}
+            >
+              <Search className="h-4 w-4" />
+              <input
+                type="text"
+                value={searchValue}
+                onChange={(event) => setSearchValue(event.target.value)}
+                placeholder="Search Models.."
+                onFocus={() => setIsSearchFocused(true)}
+                onBlur={() => setIsSearchFocused(false)}
+                className="w-full bg-transparent text-sm text-[#4f49e2] placeholder:text-[#4f49e2] focus:outline-none"
+              />
+            </div>
+            <div ref={columnMenuRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setIsColumnMenuOpen((previous) => !previous)}
+                className="inline-flex items-center gap-2 rounded-xl border border-[#e0e5f0] bg-white px-4 py-2 text-sm font-semibold text-[#4f49e2] transition hover:bg-[#eef2ff]"
+              >
+                Columns
+                <ChevronDown className="h-4 w-4" />
+              </button>
+              {isColumnMenuOpen ? (
+                <div className="absolute right-0 z-30 mt-2 w-52 overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-[0_12px_24px_-20px_rgba(15,23,42,0.35)]">
+                  <div className="max-h-64 overflow-auto p-2">
+                    {tableHeaders.map((header) => {
+                      const isVisible = visibleHeaders.includes(header);
+                      const isOnlyVisible = isVisible && visibleHeaders.length === 1;
+                      return (
+                        <label
+                          key={header}
+                          className={`flex items-center gap-2 rounded-lg px-2 py-2 text-sm ${
+                            isOnlyVisible
+                              ? "cursor-not-allowed text-[#9ca3af]"
+                              : "cursor-pointer text-[#111827] hover:bg-[#f3f4f6]"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isVisible}
+                            disabled={isOnlyVisible}
+                            onChange={() => handleToggleHeader(header)}
+                            className="h-4 w-4 rounded border-[#d1d5db] text-[#4f49e2] focus:ring-[#c7c4f7]"
+                          />
+                          <span className="truncate font-medium uppercase tracking-[0.06em]">
+                            {header}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
 
@@ -634,7 +726,7 @@ export default function LLMManagementPage() {
               </p>
               <p className="text-sm text-[#6b7280]">{loadError}</p>
             </div>
-          ) : tableHeaders.length === 0 || filteredLlms.length === 0 ? (
+          ) : visibleHeaders.length === 0 || filteredLlms.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 bg-white px-6 py-12 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#eef2ff] text-[#4f49e2] shadow-[0_12px_24px_-20px_rgba(79,73,226,0.8)]">
                 <Bot className="h-6 w-6" />
@@ -648,10 +740,10 @@ export default function LLMManagementPage() {
               <div
                 className="grid bg-[#f3f6fb] px-4 py-3 text-xs font-semibold text-[#111827]"
                 style={{
-                  gridTemplateColumns: `repeat(${tableHeaders.length}, minmax(0, 1fr))`,
+                  gridTemplateColumns: `repeat(${visibleHeaders.length}, minmax(0, 1fr))`,
                 }}
               >
-                {tableHeaders.map((header) => (
+                {visibleHeaders.map((header) => (
                   <span key={header} className="uppercase tracking-[0.08em]">
                     {header}
                   </span>
@@ -662,20 +754,20 @@ export default function LLMManagementPage() {
                   const rowKey = `${formatCellValue(item.model_id)}-${index}`;
                   return (
                     <div
-                      key={rowKey}
-                      className="grid items-center px-4 py-4 text-sm text-[#2b3341]"
-                      style={{
-                        gridTemplateColumns: `repeat(${tableHeaders.length}, minmax(0, 1fr))`,
-                      }}
-                    >
-                      {tableHeaders.map((header, headerIndex) => (
+                    key={rowKey}
+                    className="grid items-center px-4 py-4 text-sm text-[#2b3341]"
+                    style={{
+                      gridTemplateColumns: `repeat(${visibleHeaders.length}, minmax(0, 1fr))`,
+                    }}
+                  >
+                      {visibleHeaders.map((header, headerIndex) => (
                         <span
                           key={`${header}-${index}`}
-                          className={`truncate ${
-                            headerIndex === 0
-                              ? "font-semibold text-[#1c2330]"
-                              : "text-[#2b3341]"
-                          }`}
+                          className={
+                            header === "model_id"
+                              ? "break-all whitespace-normal font-semibold text-[#1c2330]"
+                              : `${headerIndex === 0 ? "font-semibold text-[#1c2330]" : "text-[#2b3341]"} truncate`
+                          }
                           title={formatCellValue(item[header])}
                         >
                           {formatCellValue(item[header])}
