@@ -6,6 +6,8 @@ import {
   Bot,
   ChevronDown,
   CheckCircle2,
+  Eye,
+  EyeOff,
   Loader2,
   RefreshCw,
   Search,
@@ -52,6 +54,8 @@ type RoundedSelectProps = {
   options: SelectOption[];
   placeholder: string;
   disabled?: boolean;
+  leadingIconSrc?: string;
+  leadingIconAlt?: string;
   onChange: (value: string) => void;
 };
 
@@ -128,6 +132,8 @@ const buildModelId = (provider: string, name: string) =>
 const toLabel = (value: string) =>
   value.length > 0 ? value[0].toUpperCase() + value.slice(1) : value;
 
+const DESCRIPTION_MIN_LENGTH = 10;
+
 const formatHeaderLabel = (header: string) =>
   header
     .split("_")
@@ -177,6 +183,8 @@ function RoundedSelect({
   options,
   placeholder,
   disabled,
+  leadingIconSrc,
+  leadingIconAlt,
   onChange,
 }: RoundedSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -215,15 +223,15 @@ function RoundedSelect({
         }}
         className={`flex w-full items-center justify-between rounded-xl border px-4 py-2.5 text-sm outline-none transition focus-within:border-[#4f49e2] focus-within:ring-2 focus-within:ring-[#4f49e2]/20 ${
           disabled
-            ? "cursor-not-allowed border-[#e5e7eb] bg-[#edf0f6]"
+            ? "cursor-not-allowed border-[#e0e5f0] bg-white/90"
             : "border-[#e0e5f0] bg-white"
         }`}
       >
         <span className={`flex items-center gap-2 ${displayClass}`}>
-          {selectedLabel?.iconSrc ? (
+          {selectedLabel?.iconSrc || leadingIconSrc ? (
             <Image
-              src={selectedLabel.iconSrc}
-              alt={`${selectedLabel.label} logo`}
+              src={selectedLabel?.iconSrc || leadingIconSrc || ""}
+              alt={selectedLabel ? `${selectedLabel.label} logo` : leadingIconAlt || "icon"}
               width={20}
               height={20}
               className="h-5 w-5 object-contain"
@@ -302,6 +310,10 @@ export default function LLMManagementPage() {
   const [selectedModelName, setSelectedModelName] = useState("");
   const [description, setDescription] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [isDescriptionTouched, setIsDescriptionTouched] = useState(false);
+  const [isApiKeyTouched, setIsApiKeyTouched] = useState(false);
+  const [isSubmitAttempted, setIsSubmitAttempted] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<LLMRecord | null>(null);
@@ -312,6 +324,7 @@ export default function LLMManagementPage() {
   const llmsRef = useRef<LLMRecord[]>([]);
   const requestIdRef = useRef(0);
   const columnMenuRef = useRef<HTMLDivElement | null>(null);
+  const createModalRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     llmsRef.current = llms;
@@ -322,6 +335,10 @@ export default function LLMManagementPage() {
     setSelectedModelName("");
     setDescription("");
     setApiKey("");
+    setIsDescriptionTouched(false);
+    setIsApiKeyTouched(false);
+    setIsSubmitAttempted(false);
+    setShowApiKey(false);
     setCreateError("");
   };
 
@@ -412,6 +429,65 @@ export default function LLMManagementPage() {
     return () => clearTimeout(timer);
   }, [isToastVisible]);
 
+  useEffect(() => {
+    if (!isCreateOpen) {
+      return;
+    }
+
+    const modalElement = createModalRef.current;
+    if (!modalElement) {
+      return;
+    }
+
+    const selector =
+      "button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])";
+    const getFocusable = () =>
+      Array.from(modalElement.querySelectorAll<HTMLElement>(selector)).filter(
+        (element) => !element.hasAttribute("disabled") && element.tabIndex !== -1
+      );
+
+    const focusableElements = getFocusable();
+    focusableElements[0]?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        if (!isCreating) {
+          setIsCreateOpen(false);
+        }
+        return;
+      }
+      if (event.key !== "Tab") {
+        return;
+      }
+
+      const focusable = getFocusable();
+      if (focusable.length === 0) {
+        event.preventDefault();
+        return;
+      }
+
+      const firstElement = focusable[0];
+      const lastElement = focusable[focusable.length - 1];
+      const activeElement = document.activeElement as HTMLElement | null;
+
+      if (event.shiftKey) {
+        if (activeElement === firstElement || !modalElement.contains(activeElement)) {
+          event.preventDefault();
+          lastElement.focus();
+        }
+        return;
+      }
+
+      if (activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isCreateOpen, isCreating]);
+
   const handleRefresh = async () => {
     if (isRefreshing) {
       return;
@@ -433,27 +509,42 @@ export default function LLMManagementPage() {
         iconSrc: `/img/${selectedProvider}.webp`,
       }))
     : [];
+  const selectedProviderIconSrc = selectedProvider
+    ? `/img/${selectedProvider}.webp`
+    : null;
+  const normalizedDescription = description.trim();
+  const normalizedApiKey = apiKey.trim();
+  const isDescriptionValid = normalizedDescription.length >= DESCRIPTION_MIN_LENGTH;
+  const isApiKeyValid = normalizedApiKey.length > 0;
+  const shouldShowDescriptionError =
+    (isDescriptionTouched || isSubmitAttempted) && !isDescriptionValid;
+  const shouldShowApiKeyError =
+    (isApiKeyTouched || isSubmitAttempted) && !isApiKeyValid;
   const isCreateDisabled =
     !selectedProvider ||
     !selectedModelName ||
-    !description.trim() ||
-    !apiKey.trim() ||
+    !isDescriptionValid ||
+    !isApiKeyValid ||
     isCreating;
 
   const handleCreateLlm = async () => {
     if (isCreateDisabled) {
+      setIsSubmitAttempted(true);
+      setIsDescriptionTouched(true);
+      setIsApiKeyTouched(true);
       return;
     }
 
     setIsCreating(true);
     setCreateError("");
+    setIsSubmitAttempted(true);
 
     const payload = {
       model_id: buildModelId(selectedProvider, selectedModelName),
       provider: selectedProvider,
       name: selectedModelName,
-      description: description.trim(),
-      api_key: apiKey.trim(),
+      description: normalizedDescription,
+      api_key: normalizedApiKey,
     };
 
     try {
@@ -1013,9 +1104,20 @@ export default function LLMManagementPage() {
 
       {isCreateOpen ? (
         <div className="fixed inset-0 z-[75] flex items-center justify-center bg-black/30 px-4 py-8">
-          <div className="w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_-30px_rgba(15,23,42,0.6)]">
+          <div
+            ref={createModalRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-llm-title"
+            className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_-30px_rgba(15,23,42,0.6)]"
+          >
             <div className="flex items-center justify-between border-b border-[#eef1f7] px-6 py-4">
-              <h4 className="text-lg font-semibold text-[#111827]">Create LLM</h4>
+              <h4
+                id="create-llm-title"
+                className="text-lg font-semibold text-[#111827]"
+              >
+                Create LLM
+              </h4>
               <button
                 type="button"
                 onClick={() => {
@@ -1030,8 +1132,8 @@ export default function LLMManagementPage() {
               </button>
             </div>
 
-            <div className="space-y-5 px-6 py-5">
-              <div className="grid gap-5 md:grid-cols-2">
+            <div className="space-y-4 px-6 py-4">
+              <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-[#111827]">
                     Provider
@@ -1046,12 +1148,22 @@ export default function LLMManagementPage() {
                       setSelectedModelName("");
                     }}
                   />
+                  <p className="text-xs text-[#8b95ad]">Choose source first.</p>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold text-[#111827]">
+                  <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#111827]">
                     Model name
-                  </label>
+                    {selectedProviderIconSrc ? (
+                      <Image
+                        src={selectedProviderIconSrc}
+                        alt={`${toLabel(selectedProvider)} logo`}
+                        width={14}
+                        height={14}
+                        className="h-3.5 w-3.5 object-contain"
+                      />
+                    ) : null}
+                  </span>
                   <RoundedSelect
                     value={selectedModelName}
                     options={modelOptions}
@@ -1059,8 +1171,17 @@ export default function LLMManagementPage() {
                       selectedProvider ? "Select model" : "Select provider first"
                     }
                     disabled={!selectedProvider}
+                    leadingIconSrc={selectedProviderIconSrc ?? undefined}
+                    leadingIconAlt={
+                      selectedProvider ? `${toLabel(selectedProvider)} logo` : "provider logo"
+                    }
                     onChange={setSelectedModelName}
                   />
+                  <p className="text-xs text-[#8b95ad]">
+                    {selectedProvider
+                      ? "Choose one model from this provider."
+                      : "Options appear after provider selection."}
+                  </p>
                 </div>
               </div>
 
@@ -1071,24 +1192,75 @@ export default function LLMManagementPage() {
                 <textarea
                   value={description}
                   onChange={(event) => setDescription(event.target.value)}
+                  onBlur={() => setIsDescriptionTouched(true)}
                   placeholder="Describe this LLM usage..."
-                  rows={3}
-                  className="w-full rounded-xl border border-[#e0e5f0] bg-white px-4 py-2.5 text-sm text-[#111827] outline-none transition placeholder:text-[#9ca3af] focus:border-[#4f49e2] focus:ring-2 focus:ring-[#4f49e2]/20"
+                  rows={2}
+                  className={`w-full rounded-xl border bg-white px-4 py-2.5 text-sm text-[#111827] outline-none transition placeholder:text-[#9ca3af] focus:ring-2 ${
+                    shouldShowDescriptionError
+                      ? "border-[#fca5a5] focus:border-[#ef4444] focus:ring-[#ef4444]/20"
+                      : "border-[#e0e5f0] focus:border-[#4f49e2] focus:ring-[#4f49e2]/20"
+                  }`}
                 />
+                <p
+                  className={`text-xs ${
+                    shouldShowDescriptionError
+                      ? "text-[#dc2626]"
+                      : isDescriptionValid
+                        ? "text-[#16a34a]"
+                        : "text-[#8b95ad]"
+                  }`}
+                >
+                  {shouldShowDescriptionError
+                    ? `Description must be at least ${DESCRIPTION_MIN_LENGTH} characters.`
+                    : isDescriptionValid
+                      ? "Looks good."
+                      : `Minimum ${DESCRIPTION_MIN_LENGTH} characters (${Math.min(
+                          normalizedDescription.length,
+                          DESCRIPTION_MIN_LENGTH
+                        )}/${DESCRIPTION_MIN_LENGTH}).`}
+                </p>
               </div>
 
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-[#111827]">
-                  API key
+                  API key <span className="text-[#ef4444]">*</span>
                 </label>
-                <input
-                  type="password"
-                  value={apiKey}
-                  onChange={(event) => setApiKey(event.target.value)}
-                  placeholder="Enter provider API key"
-                  autoComplete="new-password"
-                  className="w-full rounded-xl border border-[#e0e5f0] bg-white px-4 py-2.5 text-sm text-[#111827] outline-none transition placeholder:text-[#9ca3af] focus:border-[#4f49e2] focus:ring-2 focus:ring-[#4f49e2]/20"
-                />
+                <div className="relative">
+                  <input
+                    type={showApiKey ? "text" : "password"}
+                    value={apiKey}
+                    onChange={(event) => setApiKey(event.target.value)}
+                    onBlur={() => setIsApiKeyTouched(true)}
+                    placeholder="Enter provider API key"
+                    autoComplete="new-password"
+                    className={`w-full rounded-xl border bg-white px-4 py-2.5 pr-12 text-sm text-[#111827] outline-none transition placeholder:text-[#9ca3af] focus:ring-2 ${
+                      shouldShowApiKeyError
+                        ? "border-[#fca5a5] focus:border-[#ef4444] focus:ring-[#ef4444]/20"
+                        : "border-[#e0e5f0] focus:border-[#4f49e2] focus:ring-[#4f49e2]/20"
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowApiKey((previous) => !previous)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-[#6b7391] transition hover:bg-[#f3f4f6]"
+                    aria-label={showApiKey ? "Hide API key" : "Show API key"}
+                  >
+                    {showApiKey ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
+                <p
+                  className={`text-xs ${
+                    shouldShowApiKeyError ? "text-[#dc2626]" : "text-[#8b95ad]"
+                  }`}
+                >
+                  {shouldShowApiKeyError
+                    ? "API key is required."
+                    : "Stored securely and never displayed in plain text."}
+                </p>
               </div>
 
               {createError ? (
@@ -1105,7 +1277,7 @@ export default function LLMManagementPage() {
                   }
                   setIsCreateOpen(false);
                 }}
-                className="rounded-xl border border-[#e5e7eb] px-5 py-2 text-sm font-semibold text-[#374151]"
+                className="rounded-xl border border-[#e5e7eb] px-5 py-2 text-sm font-semibold text-[#374151] hover:bg-[#f8fafc]"
               >
                 Cancel
               </button>
@@ -1113,7 +1285,7 @@ export default function LLMManagementPage() {
                 type="button"
                 onClick={handleCreateLlm}
                 disabled={isCreateDisabled}
-                className={`inline-flex items-center gap-2 rounded-xl px-5 py-2 text-sm font-semibold text-white ${
+                className={`inline-flex min-w-[132px] items-center justify-center gap-2 rounded-xl px-5 py-2 text-sm font-semibold text-white ${
                   isCreateDisabled
                     ? "cursor-not-allowed bg-[#c7c4f7]"
                     : "bg-[#4f49e2] shadow-[0_10px_24px_-18px_rgba(79,73,226,0.9)] hover:bg-[#3f39d6]"
@@ -1128,10 +1300,13 @@ export default function LLMManagementPage() {
       ) : null}
 
       {deleteTarget ? (
-        <div className="fixed inset-0 z-[76] flex items-center justify-center bg-black/30 px-4 py-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 py-8">
           <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_-30px_rgba(15,23,42,0.6)]">
-            <div className="flex items-center justify-between border-b border-[#eef1f7] px-6 py-4">
-              <h4 className="text-lg font-semibold text-[#111827]">Delete LLM</h4>
+            <div className="flex items-center justify-between border-b border-[#fee2e2] bg-[#fff5f5] px-6 py-4">
+              <div className="flex items-center gap-2 text-[#b91c1c]">
+                <Trash2 className="h-5 w-5" />
+                <h4 className="text-lg font-semibold">Delete LLM</h4>
+              </div>
               <button
                 type="button"
                 onClick={() => {
@@ -1141,22 +1316,24 @@ export default function LLMManagementPage() {
                   setDeleteTarget(null);
                   setDeleteError("");
                 }}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f3f4f6] text-[#111827]"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#b91c1c]"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
             <div className="px-6 py-5">
               <p className="text-sm text-[#374151]">
-                Are you sure you want to delete this LLM?
+                Are you sure you want to delete{" "}
+                <span className="rounded-md bg-[#fee2e2] px-2 py-0.5 font-semibold text-[#b91c1c]">
+                  {formatCellValue(deleteTarget.model_id)}
+                </span>
+                ?
               </p>
-              <p className="mt-2 break-all text-sm font-semibold text-[#111827]">
-                {formatCellValue(deleteTarget.model_id)}
+              <p className="mt-3 text-xs text-[#9b1c1c]">
+                This action cannot be undone.
               </p>
               {deleteError ? (
-                <p className="mt-3 text-sm font-medium text-[#dc2626]">
-                  {deleteError}
-                </p>
+                <p className="mt-3 text-sm text-[#dc2626]">{deleteError}</p>
               ) : null}
             </div>
             <div className="flex items-center justify-end gap-3 border-t border-[#eef1f7] px-6 py-4">
@@ -1169,7 +1346,7 @@ export default function LLMManagementPage() {
                   setDeleteTarget(null);
                   setDeleteError("");
                 }}
-                className="rounded-xl border border-[#e5e7eb] px-5 py-2 text-sm font-semibold text-[#374151]"
+                className="rounded-xl border border-[#e5e7eb] px-5 py-2 text-sm font-semibold text-[#374151] hover:bg-[#f8fafc]"
               >
                 Cancel
               </button>
@@ -1177,10 +1354,10 @@ export default function LLMManagementPage() {
                 type="button"
                 onClick={handleConfirmDelete}
                 disabled={isDeleting}
-                className={`inline-flex items-center gap-2 rounded-xl px-5 py-2 text-sm font-semibold text-white ${
+                className={`inline-flex items-center gap-2 rounded-xl px-5 py-2 text-sm font-semibold text-white shadow-[0_10px_24px_-18px_rgba(239,68,68,0.8)] ${
                   isDeleting
                     ? "cursor-not-allowed bg-[#fca5a5]"
-                    : "bg-[#ef4444] shadow-[0_10px_24px_-18px_rgba(239,68,68,0.8)] hover:bg-[#dc2626]"
+                    : "bg-[#ef4444] hover:bg-[#dc2626]"
                 }`}
               >
                 {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
