@@ -1026,7 +1026,7 @@ export default function LLMManagementPage() {
                           return (
                             <span
                               key={`${header}-${index}`}
-                              className="max-w-[360px] truncate font-semibold text-[#1c2330]"
+                              className="max-w-[360px] break-all whitespace-normal font-semibold text-[#1c2330]"
                               title={modelId}
                             >
                               {modelId}
@@ -1065,6 +1065,18 @@ export default function LLMManagementPage() {
                               title={`${formattedDate}${rawValue !== "-" ? ` (${rawValue})` : ""}`}
                             >
                               {formattedDate}
+                            </span>
+                          );
+                        }
+
+                        if (header === "description") {
+                          return (
+                            <span
+                              key={`${header}-${index}`}
+                              className="break-words whitespace-normal text-[#2b3341]"
+                              title={formatCellValue(item[header])}
+                            >
+                              {formatCellValue(item[header])}
                             </span>
                           );
                         }
@@ -1133,9 +1145,9 @@ export default function LLMManagementPage() {
             </div>
 
             <div className="space-y-4 px-6 py-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-[#111827]">
+              <div className="grid items-start gap-4 md:grid-cols-2">
+                <div className="flex h-full flex-col">
+                  <label className="min-h-[24px] text-sm font-semibold text-[#111827]">
                     Provider
                   </label>
                   <RoundedSelect
@@ -1148,11 +1160,13 @@ export default function LLMManagementPage() {
                       setSelectedModelName("");
                     }}
                   />
-                  <p className="text-xs text-[#8b95ad]">Choose source first.</p>
+                  <p className="mt-2 min-h-[36px] text-xs text-[#8b95ad]">
+                    Choose source first.
+                  </p>
                 </div>
 
-                <div className="space-y-2">
-                  <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#111827]">
+                <div className="flex h-full flex-col">
+                  <span className="inline-flex min-h-[24px] items-center gap-2 text-sm font-semibold text-[#111827]">
                     Model name
                     {selectedProviderIconSrc ? (
                       <Image
@@ -1177,7 +1191,7 @@ export default function LLMManagementPage() {
                     }
                     onChange={setSelectedModelName}
                   />
-                  <p className="text-xs text-[#8b95ad]">
+                  <p className="mt-2 min-h-[36px] text-xs text-[#8b95ad]">
                     {selectedProvider
                       ? "Choose one model from this provider."
                       : "Options appear after provider selection."}
