@@ -4,9 +4,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { ChevronDown, Eye, EyeOff, Loader2, X } from "lucide-react";
 import type { ActionResult } from "./llmHelpers";
+import {
+  getProviderIconPath,
+  LLM_PROVIDER_MODELS,
+  type LlmProviderKey,
+} from "@/config/agent";
 
 type SelectOption = { value: string; label: string; iconSrc?: string };
-type ProviderKey = keyof typeof PROVIDER_MODELS;
+type ProviderKey = LlmProviderKey;
 
 type RoundedSelectProps = {
   value: string;
@@ -32,31 +37,6 @@ type CreateLlmModalProps = {
 };
 
 const DESCRIPTION_MIN_LENGTH = 10;
-
-const PROVIDER_MODELS = {
-  google: [
-    "gemini-3-flash-preview",
-    "gemini-3.1-pro-preview",
-    "gemini-3.1-flash-lite-preview",
-    "gemini-2.5-flash",
-    "gemini-2.5-pro",
-  ],
-  anthropic: [
-    "claude-haiku-4-5-20251001",
-    "claude-sonnet-4-6",
-    "claude-opus-4-6",
-  ],
-  groq: [
-    "openai/gpt-oss-120b",
-    "llama-3.3-70b-versatile",
-    "moonshotai/kimi-k2-instruct-0905",
-  ],
-  bedrock: [
-    "global.anthropic.claude-haiku-4-5-20251001-v1:0",
-    "global.anthropic.claude-sonnet-4-6",
-    "global.amazon.nova-2-lite-v1:0",
-  ],
-} as const;
 
 const toLabel = (value: string) =>
   value.length > 0 ? value[0].toUpperCase() + value.slice(1) : value;
@@ -262,24 +242,24 @@ export default function CreateLlmModal({
 
   const providerOptions: SelectOption[] = useMemo(
     () =>
-      (Object.keys(PROVIDER_MODELS) as ProviderKey[]).map((provider) => ({
+      (Object.keys(LLM_PROVIDER_MODELS) as ProviderKey[]).map((provider) => ({
         value: provider,
         label: toLabel(provider),
-        iconSrc: `/img/${provider}.webp`,
+        iconSrc: getProviderIconPath(provider),
       })),
     []
   );
 
   const modelOptions: SelectOption[] = selectedProvider
-    ? PROVIDER_MODELS[selectedProvider].map((modelName) => ({
+    ? LLM_PROVIDER_MODELS[selectedProvider].map((modelName) => ({
         value: modelName,
         label: modelName,
-        iconSrc: `/img/${selectedProvider}.webp`,
+        iconSrc: getProviderIconPath(selectedProvider),
       }))
     : [];
 
   const selectedProviderIconSrc = selectedProvider
-    ? `/img/${selectedProvider}.webp`
+    ? getProviderIconPath(selectedProvider)
     : null;
 
   const normalizedDescription = description.trim();
