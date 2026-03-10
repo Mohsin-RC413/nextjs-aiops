@@ -245,7 +245,9 @@ export default function AgentManagementPage() {
 
   const { onlineCount, offlineCount, totalCount } = useMemo(() => {
     const total = agents.length;
-    const online = agents.filter((agent) => isOnlineStatus(agent.status)).length;
+    const online = agents.filter((agent) =>
+      isOnlineStatus(agent.status)
+    ).length;
     const offline = total - online;
     return { onlineCount: online, offlineCount: offline, totalCount: total };
   }, [agents]);
@@ -295,6 +297,7 @@ export default function AgentManagementPage() {
         isLoading={isLoading}
         loadError={loadError}
         onDeleteSuccess={() => loadAgents({ refresh: true })}
+        onStatusUpdateSuccess={() => loadAgents({ refresh: true })}
       />
     </div>
   );

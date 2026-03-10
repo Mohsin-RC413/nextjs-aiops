@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { AGENT_API_BASE_URL, AGENT_HOST } from "@/config/agent";
+import { AGENT_API_BASE_URL, AGENT_HOST, LLM_MANAGER_API_BASE_URL } from "@/config/agent";
 import { formatDateTime, getProviderIconSrc } from "../llm-management/llmHelpers";
 
 type AgentRecord = {
@@ -41,6 +41,7 @@ type AgentRegistryProps = {
   isLoading: boolean;
   loadError: string;
   onDeleteSuccess?: () => void | Promise<void>;
+  onStatusUpdateSuccess?: () => void | Promise<void>;
 };
 
 type SortKey = "name" | "created_at" | "updated_at" | "status";
@@ -162,18 +163,22 @@ export default function AgentRegistry({
   isLoading,
   loadError,
   onDeleteSuccess,
+  onStatusUpdateSuccess,
 }: AgentRegistryProps) {
   const [filter, setFilter] = useState<"all" | "online" | "offline">("all");
   const [sortKey, setSortKey] = useState<SortKey>("updated_at");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [searchValue, setSearchValue] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [openActionMenuKey, setOpenActionMenuKey] = useState<string | null>(
+    null
+  );
   const [deleteTarget, setDeleteTarget] = useState<AgentRecord | null>(null);
   const [viewTarget, setViewTarget] = useState<AgentRecord | null>(null);
   const [editTarget, setEditTarget] = useState<AgentRecord | null>(null);
-  const [expandedCellKey, setExpandedCellKey] = useState<string | null>(null);
-  const [statusOverrides, setStatusOverrides] = useState<Record<string, string>>(
-    {}
+  const [statusUpdateError, setStatusUpdateError] = useState("");
+  const [updatingStatusRowKey, setUpdatingStatusRowKey] = useState<string | null>(
+    null
   );
   const [editTab, setEditTab] = useState<
     "rulesets" | "knowledge" | "security"
@@ -221,6 +226,21 @@ export default function AgentRegistry({
   const deleteBaseUrl = AGENT_API_BASE_URL.endsWith("/")
     ? AGENT_API_BASE_URL.slice(0, -1)
     : AGENT_API_BASE_URL;
+  const statusUpdateBaseUrl = LLM_MANAGER_API_BASE_URL.endsWith("/")
+    ? LLM_MANAGER_API_BASE_URL.slice(0, -1)
+    : LLM_MANAGER_API_BASE_URL;
+
+  const getErrorMessage = (payload: unknown, fallback: string) => {
+    if (
+      payload &&
+      typeof payload === "object" &&
+      "message" in payload &&
+      typeof (payload as { message?: unknown }).message === "string"
+    ) {
+      return String((payload as { message: string }).message);
+    }
+    return fallback;
+  };
 
   const clearRulesetStorage = (
     agentId: number | null | undefined,
@@ -310,25 +330,12 @@ export default function AgentRegistry({
     };
   };
 
-  const agentsWithLocalStatus = useMemo(
-    () =>
-      agents.map((agent, index) => {
-        const rowKey = getAgentRowKey(agent, index);
-        const localStatus = statusOverrides[rowKey];
-        if (!localStatus) {
-          return agent;
-        }
-        return { ...agent, status: localStatus };
-      }),
-    [agents, statusOverrides]
-  );
-
   const filteredAgents = useMemo(() => {
     const normalizedSearch = searchValue.trim().toLowerCase();
     const statusFiltered =
       filter === "all"
-        ? agentsWithLocalStatus
-        : agentsWithLocalStatus.filter((agent) =>
+        ? agents
+        : agents.filter((agent) =>
             filter === "online"
               ? isOnlineStatus(agent.status)
               : !isOnlineStatus(agent.status)
@@ -348,7 +355,7 @@ export default function AgentRegistry({
         .filter((value): value is string => Boolean(value))
         .some((value) => value.toLowerCase().includes(normalizedSearch))
     );
-  }, [agentsWithLocalStatus, filter, searchValue]);
+  }, [agents, filter, searchValue]);
 
   const sortedAgents = useMemo(() => {
     const rows = [...filteredAgents];
@@ -397,42 +404,15 @@ export default function AgentRegistry({
     setSortDirection(nextKey === "name" || nextKey === "status" ? "asc" : "desc");
   };
 
-  const renderTruncatedText = (
-    value: string | null | undefined,
-    cellKey: string
-  ) => {
+  const renderWrappedText = (value: string | null | undefined) => {
     const content = value?.trim() || "-";
     if (content === "-") {
       return <span className="text-[#64748b]">-</span>;
     }
-    const isExpanded = expandedCellKey === cellKey;
-    const shouldTruncate = content.length > 64;
     return (
-      <div className="space-y-1">
-        <span
-          className={
-            isExpanded
-              ? "block break-words whitespace-normal text-[#2b3341]"
-              : "block truncate text-[#2b3341]"
-          }
-          title={content}
-        >
-          {content}
-        </span>
-        {shouldTruncate ? (
-          <button
-            type="button"
-            onClick={() =>
-              setExpandedCellKey((previous) =>
-                previous === cellKey ? null : cellKey
-              )
-            }
-            className="text-xs font-semibold text-[#4f49e2] hover:underline"
-          >
-            {isExpanded ? "Show less" : "View more"}
-          </button>
-        ) : null}
-      </div>
+      <span className="block break-words whitespace-normal leading-snug text-[#2b3341]">
+        {content}
+      </span>
     );
   };
 
@@ -557,6 +537,20 @@ export default function AgentRegistry({
     }, 3000);
     return () => clearTimeout(timer);
   }, [isToastVisible]);
+
+  useEffect(() => {
+    if (!openActionMenuKey) {
+      return;
+    }
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest("[data-action-menu='true']")) {
+        setOpenActionMenuKey(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [openActionMenuKey]);
 
   useEffect(() => {
     if (!editTarget || editTab !== "rulesets" || rulesetTab !== "add") {
@@ -815,6 +809,61 @@ export default function AgentRegistry({
     }
   };
 
+  const handleToggleAgentEnabled = async (
+    agent: AgentRecord,
+    rowKey: string,
+    nextStatus: "active" | "inactive"
+  ) => {
+    if (updatingStatusRowKey) {
+      return;
+    }
+    if (!agent.agent_id) {
+      setStatusUpdateError("Agent ID is missing. Unable to update status.");
+      return;
+    }
+
+    setUpdatingStatusRowKey(rowKey);
+    setStatusUpdateError("");
+
+    try {
+      const response = await fetch(`${statusUpdateBaseUrl}/agent/`, {
+        method: "PATCH",
+        headers: {
+          accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          agent_id: agent.agent_id,
+          isEnabled: nextStatus === "active",
+        }),
+      });
+
+      let data: unknown = null;
+      try {
+        data = await response.json();
+      } catch {
+        data = null;
+      }
+
+      if (!response.ok) {
+        setStatusUpdateError(getErrorMessage(data, "Unable to update status."));
+        return;
+      }
+
+      setToastMessage(
+        nextStatus === "active"
+          ? "Agent enabled successfully."
+          : "Agent disabled successfully."
+      );
+      setIsToastVisible(true);
+      await onStatusUpdateSuccess?.();
+    } catch {
+      setStatusUpdateError("Unable to update status.");
+    } finally {
+      setUpdatingStatusRowKey(null);
+    }
+  };
+
   const handleSaveRuleset = async () => {
     if (
       !editTarget ||
@@ -1053,7 +1102,13 @@ export default function AgentRegistry({
         </div>
       </div>
 
-      <div className="mt-5 overflow-hidden rounded-2xl border border-[#eef1f7]">
+      {statusUpdateError ? (
+        <div className="mt-3 rounded-xl border border-[#fee2e2] bg-[#fff5f5] px-4 py-3 text-sm text-[#b91c1c]">
+          {statusUpdateError}
+        </div>
+      ) : null}
+
+      <div className="mt-5 overflow-x-hidden overflow-y-visible rounded-2xl border border-[#eef1f7]">
         {isLoading ? (
           <div className="bg-white">
             <div className="hidden grid-cols-[1.1fr_1.2fr_1.5fr_1.4fr_0.9fr_0.9fr_0.8fr_0.9fr] bg-[#eaf0f8] px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-[#0f172a] md:grid">
@@ -1131,11 +1186,11 @@ export default function AgentRegistry({
         ) : (
           <>
             <div className="hidden md:block">
-              <div className="grid grid-cols-[1.1fr_1.2fr_1.5fr_1.4fr_0.9fr_0.9fr_0.8fr_0.9fr] divide-x divide-[#d7e0ee] bg-[#eaf0f8] px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-[#0f172a]">
+              <div className="grid grid-cols-[1.1fr_1.2fr_1.5fr_1.4fr_0.9fr_0.9fr_0.8fr_0.9fr] items-stretch divide-x divide-[#d7e0ee] bg-[#eaf0f8] px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-[#0f172a]">
                 <button
                   type="button"
                   onClick={() => handleSort("name")}
-                  className="inline-flex w-full items-center justify-center gap-1 px-3 text-center leading-tight whitespace-normal break-words transition hover:text-[#4f49e2]"
+                  className="inline-flex h-full w-full items-center justify-start gap-1 px-3 text-left leading-tight whitespace-normal break-words transition hover:text-[#4f49e2]"
                 >
                   Name
                   <ChevronDown
@@ -1146,19 +1201,19 @@ export default function AgentRegistry({
                     }`}
                   />
                 </button>
-                <span className="px-3 text-center leading-tight whitespace-normal break-words">
+                <div className="flex h-full items-center px-3 text-left leading-tight whitespace-normal break-words">
                   Description
-                </span>
-                <span className="px-3 text-center leading-tight whitespace-normal break-words">
+                </div>
+                <div className="flex h-full items-center px-3 text-left leading-tight whitespace-normal break-words">
                   Model name
-                </span>
-                <span className="px-3 text-center leading-tight whitespace-normal break-words">
+                </div>
+                <div className="flex h-full items-center px-3 text-left leading-tight whitespace-normal break-words">
                   Instructions
-                </span>
+                </div>
                 <button
                   type="button"
                   onClick={() => handleSort("created_at")}
-                  className="inline-flex w-full items-center justify-center gap-1 px-3 text-center leading-tight whitespace-normal break-words transition hover:text-[#4f49e2]"
+                  className="inline-flex h-full w-full items-center justify-start gap-1 px-3 text-left leading-tight whitespace-normal break-words transition hover:text-[#4f49e2]"
                 >
                   Created at
                   <ChevronDown
@@ -1172,7 +1227,7 @@ export default function AgentRegistry({
                 <button
                   type="button"
                   onClick={() => handleSort("updated_at")}
-                  className="inline-flex w-full items-center justify-center gap-1 px-3 text-center leading-tight whitespace-normal break-words transition hover:text-[#4f49e2]"
+                  className="inline-flex h-full w-full items-center justify-start gap-1 px-3 text-left leading-tight whitespace-normal break-words transition hover:text-[#4f49e2]"
                 >
                   Updated at
                   <ChevronDown
@@ -1186,7 +1241,7 @@ export default function AgentRegistry({
                 <button
                   type="button"
                   onClick={() => handleSort("status")}
-                  className="inline-flex w-full items-center justify-center gap-1 px-3 text-center leading-tight whitespace-normal break-words transition hover:text-[#4f49e2]"
+                  className="inline-flex h-full w-full items-center justify-center gap-1 px-3 text-center leading-tight whitespace-normal break-words transition hover:text-[#4f49e2]"
                 >
                   Status
                   <ChevronDown
@@ -1197,9 +1252,9 @@ export default function AgentRegistry({
                     }`}
                   />
                 </button>
-                <span className="px-3 text-center leading-tight whitespace-normal break-words">
+                <div className="flex h-full items-center justify-end px-3 text-right leading-tight whitespace-normal break-words">
                   Action
-                </span>
+                </div>
               </div>
               <div className="divide-y divide-[#eef1f7] bg-white">
                 {pagedAgents.map((agent, index) => {
@@ -1219,16 +1274,21 @@ export default function AgentRegistry({
                   return (
                     <div
                       key={`desktop-row-${rowKey}`}
-                      className="grid grid-cols-[1.1fr_1.2fr_1.5fr_1.4fr_0.9fr_0.9fr_0.8fr_0.9fr] items-center divide-x divide-[#e8eef7] px-4 py-3 text-sm text-[#2b3341] transition-colors hover:bg-[#f8fbff]"
+                      className="grid grid-cols-[1.1fr_1.2fr_1.5fr_1.4fr_0.9fr_0.9fr_0.8fr_0.9fr] items-stretch divide-x divide-[#e8eef7] px-4 py-3 text-sm text-[#2b3341] transition-colors hover:bg-[#f8fbff]"
                     >
-                      <span className="truncate px-3 font-semibold text-[#0f172a]" title={agent.name || "-"}>
-                        {agent.name || "-"}
-                      </span>
-                      <div className="px-3">
-                        {renderTruncatedText(agent.description, `desc-${rowKey}`)}
+                      <div className="flex h-full items-start px-3">
+                        <span
+                          className="block break-words whitespace-normal font-semibold leading-snug text-[#0f172a]"
+                          title={agent.name || "-"}
+                        >
+                          {agent.name || "-"}
+                        </span>
                       </div>
-                      <span className="min-w-0 px-3">
-                        <span className="inline-flex max-w-full items-center gap-3">
+                      <div className="flex h-full items-start px-3">
+                        {renderWrappedText(agent.description)}
+                      </div>
+                      <div className="flex h-full min-w-0 items-start px-3">
+                        <span className="inline-flex max-w-full items-start gap-3">
                           {providerIcon ? (
                             <Image
                               src={providerIcon}
@@ -1242,27 +1302,24 @@ export default function AgentRegistry({
                           )}
                           <span className="min-w-0">
                             <span
-                              className="block truncate font-semibold text-[#0f172a]"
+                              className="block break-words whitespace-normal font-semibold leading-snug text-[#0f172a]"
                               title={modelName}
                             >
                               {modelName}
                             </span>
                             <span
-                              className="block truncate text-[11px] uppercase tracking-[0.08em] text-[#64748b]"
+                              className="mt-1 block break-words whitespace-normal text-[11px] uppercase tracking-[0.08em] text-[#64748b]"
                               title={providerValue}
                             >
                               {providerValue}
                             </span>
                           </span>
                         </span>
-                      </span>
-                      <div className="px-3">
-                        {renderTruncatedText(
-                          agent.instruction,
-                          `instruction-${rowKey}`
-                        )}
                       </div>
-                      <span className="min-w-0 px-3 text-center text-[#334155]" title={agent.created_at || "-"}>
+                      <div className="flex h-full items-start px-3">
+                        {renderWrappedText(agent.instruction)}
+                      </div>
+                      <div className="flex h-full min-w-0 flex-col items-start justify-center px-3 text-left text-[#334155]" title={agent.created_at || "-"}>
                         <span className="block leading-tight">
                           {createdDateParts.date}
                         </span>
@@ -1271,8 +1328,8 @@ export default function AgentRegistry({
                             {createdDateParts.time}
                           </span>
                         ) : null}
-                      </span>
-                      <span className="min-w-0 px-3 text-center text-[#334155]" title={agent.updated_at || "-"}>
+                      </div>
+                      <div className="flex h-full min-w-0 flex-col items-start justify-center px-3 text-left text-[#334155]" title={agent.updated_at || "-"}>
                         <span className="block leading-tight">
                           {updatedDateParts.date}
                         </span>
@@ -1281,52 +1338,92 @@ export default function AgentRegistry({
                             {updatedDateParts.time}
                           </span>
                         ) : null}
-                      </span>
-                      <span className="px-3 text-center">
+                      </div>
+                      <div className="flex h-full items-center justify-center px-3 text-center">
                         <span
                           className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone.bg} ${statusTone.text} ${statusTone.border}`}
                         >
                           <span className={`h-2 w-2 rounded-full ${statusTone.dot}`} />
                           {statusLabel}
                         </span>
-                      </span>
-                      <div className="flex items-center justify-end gap-1.5 px-3">
-                        <button
-                          type="button"
-                          onClick={() => setViewTarget(agent)}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#e2e8f0] text-[#475569] transition hover:bg-[#eef2ff] hover:text-[#4f49e2]"
-                          title="View details"
-                          aria-label={`View ${agent.name}`}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditTarget(agent)}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#e2e8f0] text-[#475569] transition hover:bg-[#eef2ff] hover:text-[#4f49e2]"
-                          title="Edit settings"
-                          aria-label={`Edit ${agent.name}`}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setStatusOverrides((previous) => ({
-                              ...previous,
-                              [rowKey]: nextStatus,
-                            }))
-                          }
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#e2e8f0] text-[#475569] transition hover:bg-[#fff7ed] hover:text-[#c2410c]"
-                          title={
-                            isOnlineStatus(agent.status)
-                              ? "Mark as inactive"
-                              : "Mark as active"
-                          }
-                          aria-label={`Toggle status for ${agent.name}`}
-                        >
-                          <Power className="h-4 w-4" />
-                        </button>
+                      </div>
+                      <div className="flex h-full items-center justify-end px-3">
+                        <div className="relative" data-action-menu="true">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setOpenActionMenuKey((previous) =>
+                                previous === rowKey ? null : rowKey
+                              )
+                            }
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#d8e1f0] text-[#475569] transition hover:bg-[#eef2ff] hover:text-[#4f49e2]"
+                            aria-label={`Open actions for ${agent.name}`}
+                            title="Actions"
+                          >
+                            <ChevronDown
+                              className={`h-4 w-4 transition ${
+                                openActionMenuKey === rowKey
+                                  ? "rotate-180 text-[#4f49e2]"
+                                  : ""
+                              }`}
+                            />
+                          </button>
+
+                          {openActionMenuKey === rowKey ? (
+                            <div className="absolute right-0 z-30 mt-2 w-44 overflow-hidden rounded-xl border border-[#e2e8f0] bg-white shadow-[0_12px_24px_-20px_rgba(15,23,42,0.45)]">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setViewTarget(agent);
+                                  setOpenActionMenuKey(null);
+                                }}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#334155] hover:bg-[#eef2ff] hover:text-[#4f49e2]"
+                              >
+                                <Eye className="h-4 w-4" />
+                                View
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditTarget(agent);
+                                  setOpenActionMenuKey(null);
+                                }}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#334155] hover:bg-[#eef2ff] hover:text-[#4f49e2]"
+                              >
+                                <Pencil className="h-4 w-4" />
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  handleToggleAgentEnabled(agent, rowKey, nextStatus);
+                                  setOpenActionMenuKey(null);
+                                }}
+                                disabled={updatingStatusRowKey === rowKey}
+                                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm ${
+                                  updatingStatusRowKey === rowKey
+                                    ? "cursor-not-allowed text-[#94a3b8]"
+                                    : "text-[#334155] hover:bg-[#fff7ed] hover:text-[#c2410c]"
+                                }`}
+                              >
+                                <Power className="h-4 w-4" />
+                                {isOnlineStatus(agent.status) ? "Disable" : "Enable"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDeleteTarget(agent);
+                                  setDeleteError("");
+                                  setOpenActionMenuKey(null);
+                                }}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#b91c1c] hover:bg-[#fff1f2]"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                Delete
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                   );
@@ -1373,7 +1470,7 @@ export default function AgentRegistry({
                         Description
                       </p>
                       <div className="mt-1">
-                        {renderTruncatedText(agent.description, `mobile-desc-${rowKey}`)}
+                        {renderWrappedText(agent.description)}
                       </div>
                     </div>
                     <div className="rounded-xl border border-[#e6ebf5] bg-[#f8fafc] px-3 py-2">
@@ -1407,42 +1504,83 @@ export default function AgentRegistry({
                         Instructions
                       </p>
                       <div className="mt-1">
-                        {renderTruncatedText(
-                          agent.instruction,
-                          `mobile-instruction-${rowKey}`
-                        )}
+                        {renderWrappedText(agent.instruction)}
                       </div>
                     </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setViewTarget(agent)}
-                        className="inline-flex items-center justify-center gap-1 rounded-lg border border-[#dce3f1] px-3 py-2 text-xs font-semibold text-[#334155] transition hover:bg-[#eef2ff] hover:text-[#4f49e2]"
-                      >
-                        <Eye className="h-3.5 w-3.5" />
-                        View
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditTarget(agent)}
-                        className="inline-flex items-center justify-center gap-1 rounded-lg border border-[#dce3f1] px-3 py-2 text-xs font-semibold text-[#334155] transition hover:bg-[#eef2ff] hover:text-[#4f49e2]"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                        Edit
-                      </button>
+                    <div className="relative" data-action-menu="true">
                       <button
                         type="button"
                         onClick={() =>
-                          setStatusOverrides((previous) => ({
-                            ...previous,
-                            [rowKey]: nextStatus,
-                          }))
+                          setOpenActionMenuKey((previous) =>
+                            previous === rowKey ? null : rowKey
+                          )
                         }
-                        className="inline-flex items-center justify-center gap-1 rounded-lg border border-[#dce3f1] px-3 py-2 text-xs font-semibold text-[#334155] transition hover:bg-[#fff7ed] hover:text-[#c2410c]"
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#dce3f1] px-3 py-2 text-xs font-semibold text-[#334155] transition hover:bg-[#eef2ff] hover:text-[#4f49e2]"
                       >
-                        <Power className="h-3.5 w-3.5" />
-                        {isOnlineStatus(agent.status) ? "Disable" : "Enable"}
+                        Actions
+                        <ChevronDown
+                          className={`h-3.5 w-3.5 transition ${
+                            openActionMenuKey === rowKey
+                              ? "rotate-180 text-[#4f49e2]"
+                              : ""
+                          }`}
+                        />
                       </button>
+
+                      {openActionMenuKey === rowKey ? (
+                        <div className="absolute left-0 right-0 z-30 mt-2 overflow-hidden rounded-xl border border-[#e2e8f0] bg-white shadow-[0_12px_24px_-20px_rgba(15,23,42,0.45)]">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setViewTarget(agent);
+                              setOpenActionMenuKey(null);
+                            }}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#334155] hover:bg-[#eef2ff] hover:text-[#4f49e2]"
+                          >
+                            <Eye className="h-4 w-4" />
+                            View
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditTarget(agent);
+                              setOpenActionMenuKey(null);
+                            }}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#334155] hover:bg-[#eef2ff] hover:text-[#4f49e2]"
+                          >
+                            <Pencil className="h-4 w-4" />
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleToggleAgentEnabled(agent, rowKey, nextStatus);
+                              setOpenActionMenuKey(null);
+                            }}
+                            disabled={updatingStatusRowKey === rowKey}
+                            className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm ${
+                              updatingStatusRowKey === rowKey
+                                ? "cursor-not-allowed text-[#94a3b8]"
+                                : "text-[#334155] hover:bg-[#fff7ed] hover:text-[#c2410c]"
+                            }`}
+                          >
+                            <Power className="h-4 w-4" />
+                            {isOnlineStatus(agent.status) ? "Disable" : "Enable"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDeleteTarget(agent);
+                              setDeleteError("");
+                              setOpenActionMenuKey(null);
+                            }}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#b91c1c] hover:bg-[#fff1f2]"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Delete
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 );
