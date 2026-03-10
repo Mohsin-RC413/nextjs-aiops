@@ -5,7 +5,7 @@ import { RefreshCw } from "lucide-react";
 import AgentRegistry from "./AgentRegistry";
 import AgentStats from "./AgentStats";
 import CreateNewAgent from "./createnewagent";
-import { AGENT_API_BASE_URL, AGENT_ORG_KEY } from "@/config/agent";
+import { LLM_MANAGER_API_BASE_URL } from "@/config/agent";
 
 type AgentRecord = {
   agentId: number;
@@ -15,12 +15,50 @@ type AgentRecord = {
   enterprise: string;
   start_time: string | null;
   stop_time: string | null;
+  agent_id: string | null;
+  description: string | null;
+  instruction: string | null;
+  model_id: string | null;
+  modelName: string | null;
+  modelProvider: string | null;
+  created_at: string | null;
+  updated_at: string | null;
 };
 
-const AGENT_API_BASE = AGENT_API_BASE_URL.endsWith("/")
-  ? AGENT_API_BASE_URL.slice(0, -1)
-  : AGENT_API_BASE_URL;
-const AGENT_LIST_URL = `${AGENT_API_BASE}/aiops/agent/list`;
+const AGENT_MANAGER_API_BASE = LLM_MANAGER_API_BASE_URL.endsWith("/")
+  ? LLM_MANAGER_API_BASE_URL.slice(0, -1)
+  : LLM_MANAGER_API_BASE_URL;
+const AGENT_LIST_URL = `${AGENT_MANAGER_API_BASE}/agent/`;
+const LLM_LIST_URL = `${AGENT_MANAGER_API_BASE}/llms/`;
+
+const isOnlineStatus = (statusValue: string | null | undefined) => {
+  const normalized = statusValue?.trim().toLowerCase() ?? "";
+  return (
+    normalized === "started" ||
+    normalized === "active" ||
+    normalized === "online"
+  );
+};
+
+const getStringOrNull = (value: unknown) => {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const getLoadErrorMessage = (payload: unknown, fallback: string) => {
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "message" in payload &&
+    typeof (payload as { message?: unknown }).message === "string"
+  ) {
+    return String((payload as { message: string }).message);
+  }
+  return fallback;
+};
 
 export default function AgentManagementPage() {
   const [agents, setAgents] = useState<AgentRecord[]>([]);
@@ -48,29 +86,111 @@ export default function AgentManagementPage() {
       }
 
       try {
-        const url = `${AGENT_LIST_URL}?orgKey=${encodeURIComponent(
-          AGENT_ORG_KEY
-        )}`;
-        const response = await fetch(url, {
-          headers: { accept: "application/json" },
-          signal: options?.signal,
-        });
-        const data = await response.json();
+        const [agentResponse, llmResponse] = await Promise.all([
+          fetch(AGENT_LIST_URL, {
+            headers: { accept: "application/json" },
+            signal: options?.signal,
+          }),
+          fetch(LLM_LIST_URL, {
+            headers: { accept: "application/json" },
+            signal: options?.signal,
+          }),
+        ]);
+        const [agentPayload, llmPayload] = await Promise.all([
+          agentResponse.json(),
+          llmResponse.json(),
+        ]);
+
         console.log("Agent list response:", {
-          ok: response.ok,
-          status: response.status,
-          data,
+          ok: agentResponse.ok,
+          status: agentResponse.status,
+          data: agentPayload,
         });
 
         if (requestId !== requestIdRef.current) {
           return;
         }
 
-        if (response.ok && Array.isArray(data?.agents)) {
-          setAgents(data.agents);
+        if (!agentResponse.ok || !Array.isArray(agentPayload)) {
+          if (!shouldRefresh) {
+            setLoadError(getLoadErrorMessage(agentPayload, "Unable to load agents."));
+          }
+          return;
+        }
+
+        const llmByModelId = new Map<
+          string,
+          { provider: string | null; name: string | null }
+        >();
+
+        if (llmResponse.ok && Array.isArray(llmPayload)) {
+          llmPayload.forEach((item) => {
+            const record =
+              item && typeof item === "object" && !Array.isArray(item)
+                ? (item as Record<string, unknown>)
+                : null;
+            if (!record) {
+              return;
+            }
+            const modelId = getStringOrNull(record.model_id);
+            if (!modelId) {
+              return;
+            }
+            llmByModelId.set(modelId.toLowerCase(), {
+              provider: getStringOrNull(record.provider),
+              name: getStringOrNull(record.name),
+            });
+          });
+        }
+
+        const normalizedAgents = agentPayload.map((item, index) => {
+          const record =
+            item && typeof item === "object" && !Array.isArray(item)
+              ? (item as Record<string, unknown>)
+              : {};
+
+          const statusFromApi = getStringOrNull(record.status);
+          const isEnabledFromApi =
+            typeof record.isEnabled === "boolean" ? record.isEnabled : null;
+          const status =
+            isEnabledFromApi === true
+              ? "active"
+              : isEnabledFromApi === false
+                ? "inactive"
+                : statusFromApi ?? "offline";
+          const modelId = getStringOrNull(record.model_id);
+          const llmRecord = modelId
+            ? llmByModelId.get(modelId.toLowerCase())
+            : undefined;
+          const type = getStringOrNull(record.type) ?? "agent";
+
+          return {
+            agentId:
+              typeof record.agentId === "number" ? record.agentId : index + 1,
+            name: getStringOrNull(record.name) ?? "Untitled Agent",
+            port: typeof record.port === "number" ? record.port : null,
+            status,
+            enterprise: type,
+            start_time: getStringOrNull(record.start_time),
+            stop_time: getStringOrNull(record.stop_time),
+            agent_id: getStringOrNull(record.agent_id),
+            description: getStringOrNull(record.description),
+            instruction: getStringOrNull(record.instruction),
+            model_id: modelId,
+            modelName: llmRecord?.name ?? modelId,
+            modelProvider: llmRecord?.provider ?? null,
+            created_at: getStringOrNull(record.created_at),
+            updated_at: getStringOrNull(record.updated_at),
+          } satisfies AgentRecord;
+        });
+
+        setAgents(normalizedAgents);
+        if (!llmResponse.ok) {
+          console.warn("LLM list request failed. Model metadata may be incomplete.");
+        }
+
+        if (!shouldRefresh) {
           setLoadError("");
-        } else if (!shouldRefresh) {
-          setLoadError(data?.message || "Unable to load agents.");
         }
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
@@ -125,9 +245,7 @@ export default function AgentManagementPage() {
 
   const { onlineCount, offlineCount, totalCount } = useMemo(() => {
     const total = agents.length;
-    const online = agents.filter(
-      (agent) => agent.status?.toUpperCase() === "STARTED"
-    ).length;
+    const online = agents.filter((agent) => isOnlineStatus(agent.status)).length;
     const offline = total - online;
     return { onlineCount: online, offlineCount: offline, totalCount: total };
   }, [agents]);

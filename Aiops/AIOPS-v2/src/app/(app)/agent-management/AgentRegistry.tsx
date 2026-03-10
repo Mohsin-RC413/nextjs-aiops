@@ -6,15 +6,18 @@ import {
   ChevronDown,
   Eye,
   ListChecks,
+  Pencil,
   Plus,
+  Power,
   Search,
-  Settings,
   Shield,
   Trash2,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { AGENT_API_BASE_URL, AGENT_HOST } from "@/config/agent";
+import { formatDateTime, getProviderIconSrc } from "../llm-management/llmHelpers";
 
 type AgentRecord = {
   agentId: number;
@@ -24,6 +27,14 @@ type AgentRecord = {
   enterprise: string;
   start_time: string | null;
   stop_time: string | null;
+  agent_id: string | null;
+  description: string | null;
+  instruction: string | null;
+  model_id: string | null;
+  modelName: string | null;
+  modelProvider: string | null;
+  created_at: string | null;
+  updated_at: string | null;
 };
 type AgentRegistryProps = {
   agents: AgentRecord[];
@@ -31,6 +42,8 @@ type AgentRegistryProps = {
   loadError: string;
   onDeleteSuccess?: () => void | Promise<void>;
 };
+
+type SortKey = "name" | "created_at" | "updated_at" | "status";
 
 type RulesetItem = {
   agent_id: string;
@@ -151,10 +164,17 @@ export default function AgentRegistry({
   onDeleteSuccess,
 }: AgentRegistryProps) {
   const [filter, setFilter] = useState<"all" | "online" | "offline">("all");
+  const [sortKey, setSortKey] = useState<SortKey>("updated_at");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [searchValue, setSearchValue] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AgentRecord | null>(null);
+  const [viewTarget, setViewTarget] = useState<AgentRecord | null>(null);
   const [editTarget, setEditTarget] = useState<AgentRecord | null>(null);
+  const [expandedCellKey, setExpandedCellKey] = useState<string | null>(null);
+  const [statusOverrides, setStatusOverrides] = useState<Record<string, string>>(
+    {}
+  );
   const [editTab, setEditTab] = useState<
     "rulesets" | "knowledge" | "security"
   >("rulesets");
@@ -234,33 +254,212 @@ export default function AgentRegistry({
     setEditTarget(null);
   };
 
+  const getAgentRowKey = (agent: AgentRecord, fallbackIndex: number) => {
+    if (agent.agent_id) {
+      return agent.agent_id;
+    }
+    if (agent.agentId) {
+      return String(agent.agentId);
+    }
+    return `${agent.name}-${fallbackIndex}`;
+  };
+
+  const isOnlineStatus = (statusValue: string | null | undefined) => {
+    const normalized = statusValue?.trim().toLowerCase() ?? "";
+    return (
+      normalized === "started" ||
+      normalized === "active" ||
+      normalized === "online"
+    );
+  };
+
+  const formatStatusLabel = (statusValue: string | null | undefined) => {
+    const normalized = statusValue?.trim();
+    if (!normalized) {
+      return "Offline";
+    }
+    return normalized
+      .split("_")
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join(" ");
+  };
+
+  const getStatusTone = (statusValue: string | null | undefined) => {
+    const normalized = statusValue?.trim().toLowerCase() ?? "";
+    if (normalized === "active" || normalized === "online" || normalized === "started") {
+      return {
+        text: "text-[#166534]",
+        bg: "bg-[#dcfce7]",
+        dot: "bg-[#16a34a]",
+        border: "border-[#bbf7d0]",
+      };
+    }
+    if (normalized === "inactive" || normalized === "offline" || normalized === "stopped") {
+      return {
+        text: "text-[#9a3412]",
+        bg: "bg-[#ffedd5]",
+        dot: "bg-[#f97316]",
+        border: "border-[#fed7aa]",
+      };
+    }
+    return {
+      text: "text-[#334155]",
+      bg: "bg-[#e2e8f0]",
+      dot: "bg-[#64748b]",
+      border: "border-[#cbd5e1]",
+    };
+  };
+
+  const agentsWithLocalStatus = useMemo(
+    () =>
+      agents.map((agent, index) => {
+        const rowKey = getAgentRowKey(agent, index);
+        const localStatus = statusOverrides[rowKey];
+        if (!localStatus) {
+          return agent;
+        }
+        return { ...agent, status: localStatus };
+      }),
+    [agents, statusOverrides]
+  );
+
   const filteredAgents = useMemo(() => {
     const normalizedSearch = searchValue.trim().toLowerCase();
-    const statusFiltered = filter === "all"
-      ? agents
-      : agents.filter((agent) =>
-          filter === "online"
-            ? agent.status?.toUpperCase() === "STARTED"
-            : agent.status?.toUpperCase() !== "STARTED"
-        );
+    const statusFiltered =
+      filter === "all"
+        ? agentsWithLocalStatus
+        : agentsWithLocalStatus.filter((agent) =>
+            filter === "online"
+              ? isOnlineStatus(agent.status)
+              : !isOnlineStatus(agent.status)
+          );
     if (!normalizedSearch) {
       return statusFiltered;
     }
     return statusFiltered.filter((agent) =>
-      agent.name?.toLowerCase().includes(normalizedSearch)
+      [
+        agent.name,
+        agent.description,
+        agent.modelName,
+        agent.modelProvider,
+        agent.instruction,
+        agent.status,
+      ]
+        .filter((value): value is string => Boolean(value))
+        .some((value) => value.toLowerCase().includes(normalizedSearch))
     );
-  }, [agents, filter, searchValue]);
+  }, [agentsWithLocalStatus, filter, searchValue]);
+
+  const sortedAgents = useMemo(() => {
+    const rows = [...filteredAgents];
+    rows.sort((left, right) => {
+      if (sortKey === "name") {
+        const leftValue = (left.name || "").toLowerCase();
+        const rightValue = (right.name || "").toLowerCase();
+        const compare = leftValue.localeCompare(rightValue, undefined, {
+          numeric: true,
+          sensitivity: "base",
+        });
+        return sortDirection === "asc" ? compare : -compare;
+      }
+
+      if (sortKey === "status") {
+        const leftValue = formatStatusLabel(left.status);
+        const rightValue = formatStatusLabel(right.status);
+        const compare = leftValue.localeCompare(rightValue, undefined, {
+          numeric: true,
+          sensitivity: "base",
+        });
+        return sortDirection === "asc" ? compare : -compare;
+      }
+
+      const leftDate =
+        sortKey === "created_at" ? left.created_at : left.updated_at;
+      const rightDate =
+        sortKey === "created_at" ? right.created_at : right.updated_at;
+      const leftTime = leftDate ? new Date(leftDate).getTime() : 0;
+      const rightTime = rightDate ? new Date(rightDate).getTime() : 0;
+      const leftSafe = Number.isNaN(leftTime) ? 0 : leftTime;
+      const rightSafe = Number.isNaN(rightTime) ? 0 : rightTime;
+      return sortDirection === "asc"
+        ? leftSafe - rightSafe
+        : rightSafe - leftSafe;
+    });
+    return rows;
+  }, [filteredAgents, sortDirection, sortKey]);
+
+  const handleSort = (nextKey: SortKey) => {
+    if (sortKey === nextKey) {
+      setSortDirection((previous) => (previous === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortKey(nextKey);
+    setSortDirection(nextKey === "name" || nextKey === "status" ? "asc" : "desc");
+  };
+
+  const renderTruncatedText = (
+    value: string | null | undefined,
+    cellKey: string
+  ) => {
+    const content = value?.trim() || "-";
+    if (content === "-") {
+      return <span className="text-[#64748b]">-</span>;
+    }
+    const isExpanded = expandedCellKey === cellKey;
+    const shouldTruncate = content.length > 64;
+    return (
+      <div className="space-y-1">
+        <span
+          className={
+            isExpanded
+              ? "block break-words whitespace-normal text-[#2b3341]"
+              : "block truncate text-[#2b3341]"
+          }
+          title={content}
+        >
+          {content}
+        </span>
+        {shouldTruncate ? (
+          <button
+            type="button"
+            onClick={() =>
+              setExpandedCellKey((previous) =>
+                previous === cellKey ? null : cellKey
+              )
+            }
+            className="text-xs font-semibold text-[#4f49e2] hover:underline"
+          >
+            {isExpanded ? "Show less" : "View more"}
+          </button>
+        ) : null}
+      </div>
+    );
+  };
+
+  const splitDateTime = (formattedValue: string) => {
+    if (formattedValue === "-") {
+      return { date: "-", time: "" };
+    }
+    const splitAt = formattedValue.lastIndexOf(", ");
+    if (splitAt === -1) {
+      return { date: formattedValue, time: "" };
+    }
+    return {
+      date: formattedValue.slice(0, splitAt),
+      time: formattedValue.slice(splitAt + 2),
+    };
+  };
 
   const pageSize = 6;
-  const totalPages = Math.max(1, Math.ceil(filteredAgents.length / pageSize));
-  const pagedAgents = filteredAgents.slice(
+  const totalPages = Math.max(1, Math.ceil(sortedAgents.length / pageSize));
+  const pagedAgents = sortedAgents.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   );
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [filter, searchValue, agents.length]);
+  }, [agents.length, filter, searchValue, sortDirection, sortKey]);
 
   useEffect(() => {
     if (!editTarget) {
@@ -856,11 +1055,46 @@ export default function AgentRegistry({
 
       <div className="mt-5 overflow-hidden rounded-2xl border border-[#eef1f7]">
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center gap-3 bg-white px-6 py-12 text-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#eef2ff] text-[#4f49e2] shadow-[0_12px_24px_-20px_rgba(79,73,226,0.8)]">
-              <Bot className="h-6 w-6" />
+          <div className="bg-white">
+            <div className="hidden grid-cols-[1.1fr_1.2fr_1.5fr_1.4fr_0.9fr_0.9fr_0.8fr_0.9fr] bg-[#eaf0f8] px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-[#0f172a] md:grid">
+              <span>Name</span>
+              <span>Description</span>
+              <span>Model name</span>
+              <span>Instructions</span>
+              <span>Created at</span>
+              <span>Updated at</span>
+              <span>Status</span>
+              <span className="text-right">Action</span>
             </div>
-            <p className="text-sm text-[#6b7280]">Loading agents...</p>
+            <div className="hidden divide-y divide-[#eef1f7] md:block">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div
+                  key={`desktop-skeleton-${index}`}
+                  className="grid animate-pulse grid-cols-[1.1fr_1.2fr_1.5fr_1.4fr_0.9fr_0.9fr_0.8fr_0.9fr] items-center px-4 py-3"
+                >
+                  {Array.from({ length: 7 }).map((__, cellIndex) => (
+                    <span
+                      key={`desktop-skeleton-cell-${index}-${cellIndex}`}
+                      className="mr-3 h-4 rounded bg-[#edf2f9]"
+                    />
+                  ))}
+                  <span className="ml-auto h-8 w-24 rounded-lg bg-[#edf2f9]" />
+                </div>
+              ))}
+            </div>
+            <div className="divide-y divide-[#eef1f7] md:hidden">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <div
+                  key={`mobile-skeleton-${index}`}
+                  className="animate-pulse space-y-3 px-4 py-4"
+                >
+                  <div className="h-4 w-2/5 rounded bg-[#edf2f9]" />
+                  <div className="h-3 w-full rounded bg-[#edf2f9]" />
+                  <div className="h-3 w-4/5 rounded bg-[#edf2f9]" />
+                  <div className="h-8 w-full rounded-xl bg-[#edf2f9]" />
+                </div>
+              ))}
+            </div>
           </div>
         ) : loadError ? (
           <div className="flex flex-col items-center justify-center gap-3 bg-white px-6 py-12 text-center">
@@ -872,7 +1106,7 @@ export default function AgentRegistry({
             </p>
             <p className="text-sm text-[#6b7280]">{loadError}</p>
           </div>
-        ) : filteredAgents.length === 0 ? (
+        ) : sortedAgents.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 bg-white px-6 py-12 text-center">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#eef2ff] text-[#4f49e2] shadow-[0_12px_24px_-20px_rgba(79,73,226,0.8)]">
               <Bot className="h-6 w-6" />
@@ -896,101 +1130,323 @@ export default function AgentRegistry({
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-[0.4fr_1.4fr_1fr_2fr_1.3fr_1fr_0.8fr] bg-[#f3f6fb] px-4 py-3 text-xs font-semibold text-[#111827]">
-              <span>
-                <input type="checkbox" className="h-4 w-4 rounded" />
-              </span>
-              <span>Name</span>
-              <span>Type</span>
-              <span>Last modification</span>
-              <span>Running at</span>
-              <span>Status</span>
-              <span>Action</span>
-            </div>
-            <div className="divide-y divide-[#eef1f7] bg-white">
-              {pagedAgents.map((agent, index) => {
-                const isOnline = agent.status?.toUpperCase() === "STARTED";
-                const isMuleAgent = agent.enterprise
-                  ?.toLowerCase()
-                  .includes("mule");
-                const runningAt = agent.port
-                  ? agent.port.toString()
-                  : "Agent Not Started";
-                const modified = isOnline
-                  ? agent.start_time
-                    ? `Started at ${agent.start_time}`
-                    : "Not started"
-                  : agent.stop_time
-                    ? `Stopped at ${agent.stop_time}`
-                    : agent.start_time
-                      ? `Started at ${agent.start_time}`
-                      : "Not started";
-                return (
-                <div
-                  key={`${agent.name}-${index}`}
-                  className="grid grid-cols-[0.4fr_1.4fr_1fr_2fr_1.3fr_1fr_0.8fr] items-center px-4 py-4 text-sm text-[#2b3341]"
+            <div className="hidden md:block">
+              <div className="grid grid-cols-[1.1fr_1.2fr_1.5fr_1.4fr_0.9fr_0.9fr_0.8fr_0.9fr] divide-x divide-[#d7e0ee] bg-[#eaf0f8] px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-[#0f172a]">
+                <button
+                  type="button"
+                  onClick={() => handleSort("name")}
+                  className="inline-flex w-full items-center justify-center gap-1 px-3 text-center leading-tight whitespace-normal break-words transition hover:text-[#4f49e2]"
                 >
-                  <span>
-                    <input type="checkbox" className="h-4 w-4 rounded" />
-                  </span>
-                  <span className="font-semibold text-[#1c2330]">
-                    {agent.name}
-                  </span>
-                  <span>Agent</span>
-                  <span>{modified}</span>
-                  <span>{runningAt}</span>
-                  <span
-                    className={`flex items-center gap-2 ${
-                      isOnline ? "text-[#1f7a1f]" : "text-[#b45309]"
+                  Name
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 transition ${
+                      sortKey === "name"
+                        ? `${sortDirection === "asc" ? "rotate-180" : ""} text-[#4f49e2]`
+                        : "text-[#94a3b8]"
                     }`}
+                  />
+                </button>
+                <span className="px-3 text-center leading-tight whitespace-normal break-words">
+                  Description
+                </span>
+                <span className="px-3 text-center leading-tight whitespace-normal break-words">
+                  Model name
+                </span>
+                <span className="px-3 text-center leading-tight whitespace-normal break-words">
+                  Instructions
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleSort("created_at")}
+                  className="inline-flex w-full items-center justify-center gap-1 px-3 text-center leading-tight whitespace-normal break-words transition hover:text-[#4f49e2]"
+                >
+                  Created at
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 transition ${
+                      sortKey === "created_at"
+                        ? `${sortDirection === "asc" ? "rotate-180" : ""} text-[#4f49e2]`
+                        : "text-[#94a3b8]"
+                    }`}
+                  />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSort("updated_at")}
+                  className="inline-flex w-full items-center justify-center gap-1 px-3 text-center leading-tight whitespace-normal break-words transition hover:text-[#4f49e2]"
+                >
+                  Updated at
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 transition ${
+                      sortKey === "updated_at"
+                        ? `${sortDirection === "asc" ? "rotate-180" : ""} text-[#4f49e2]`
+                        : "text-[#94a3b8]"
+                    }`}
+                  />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSort("status")}
+                  className="inline-flex w-full items-center justify-center gap-1 px-3 text-center leading-tight whitespace-normal break-words transition hover:text-[#4f49e2]"
+                >
+                  Status
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 transition ${
+                      sortKey === "status"
+                        ? `${sortDirection === "asc" ? "rotate-180" : ""} text-[#4f49e2]`
+                        : "text-[#94a3b8]"
+                    }`}
+                  />
+                </button>
+                <span className="px-3 text-center leading-tight whitespace-normal break-words">
+                  Action
+                </span>
+              </div>
+              <div className="divide-y divide-[#eef1f7] bg-white">
+                {pagedAgents.map((agent, index) => {
+                  const rowKey = getAgentRowKey(agent, index);
+                  const modelName = agent.modelName || agent.model_id || "-";
+                  const providerValue = agent.modelProvider || "-";
+                  const providerIcon = getProviderIconSrc(agent.modelProvider);
+                  const createdAt = formatDateTime(agent.created_at);
+                  const updatedAt = formatDateTime(agent.updated_at);
+                  const createdDateParts = splitDateTime(createdAt);
+                  const updatedDateParts = splitDateTime(updatedAt);
+                  const statusLabel = formatStatusLabel(agent.status);
+                  const statusTone = getStatusTone(agent.status);
+                  const nextStatus = isOnlineStatus(agent.status)
+                    ? "inactive"
+                    : "active";
+                  return (
+                    <div
+                      key={`desktop-row-${rowKey}`}
+                      className="grid grid-cols-[1.1fr_1.2fr_1.5fr_1.4fr_0.9fr_0.9fr_0.8fr_0.9fr] items-center divide-x divide-[#e8eef7] px-4 py-3 text-sm text-[#2b3341] transition-colors hover:bg-[#f8fbff]"
+                    >
+                      <span className="truncate px-3 font-semibold text-[#0f172a]" title={agent.name || "-"}>
+                        {agent.name || "-"}
+                      </span>
+                      <div className="px-3">
+                        {renderTruncatedText(agent.description, `desc-${rowKey}`)}
+                      </div>
+                      <span className="min-w-0 px-3">
+                        <span className="inline-flex max-w-full items-center gap-3">
+                          {providerIcon ? (
+                            <Image
+                              src={providerIcon}
+                              alt={`${providerValue} logo`}
+                              width={20}
+                              height={20}
+                              className="h-5 w-5 flex-none object-contain"
+                            />
+                          ) : (
+                            <span className="h-5 w-5 flex-none rounded-full bg-[#e2e8f0]" />
+                          )}
+                          <span className="min-w-0">
+                            <span
+                              className="block truncate font-semibold text-[#0f172a]"
+                              title={modelName}
+                            >
+                              {modelName}
+                            </span>
+                            <span
+                              className="block truncate text-[11px] uppercase tracking-[0.08em] text-[#64748b]"
+                              title={providerValue}
+                            >
+                              {providerValue}
+                            </span>
+                          </span>
+                        </span>
+                      </span>
+                      <div className="px-3">
+                        {renderTruncatedText(
+                          agent.instruction,
+                          `instruction-${rowKey}`
+                        )}
+                      </div>
+                      <span className="min-w-0 px-3 text-center text-[#334155]" title={agent.created_at || "-"}>
+                        <span className="block leading-tight">
+                          {createdDateParts.date}
+                        </span>
+                        {createdDateParts.time ? (
+                          <span className="mt-0.5 block text-xs leading-tight text-[#64748b]">
+                            {createdDateParts.time}
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="min-w-0 px-3 text-center text-[#334155]" title={agent.updated_at || "-"}>
+                        <span className="block leading-tight">
+                          {updatedDateParts.date}
+                        </span>
+                        {updatedDateParts.time ? (
+                          <span className="mt-0.5 block text-xs leading-tight text-[#64748b]">
+                            {updatedDateParts.time}
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="px-3 text-center">
+                        <span
+                          className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone.bg} ${statusTone.text} ${statusTone.border}`}
+                        >
+                          <span className={`h-2 w-2 rounded-full ${statusTone.dot}`} />
+                          {statusLabel}
+                        </span>
+                      </span>
+                      <div className="flex items-center justify-end gap-1.5 px-3">
+                        <button
+                          type="button"
+                          onClick={() => setViewTarget(agent)}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#e2e8f0] text-[#475569] transition hover:bg-[#eef2ff] hover:text-[#4f49e2]"
+                          title="View details"
+                          aria-label={`View ${agent.name}`}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditTarget(agent)}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#e2e8f0] text-[#475569] transition hover:bg-[#eef2ff] hover:text-[#4f49e2]"
+                          title="Edit settings"
+                          aria-label={`Edit ${agent.name}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setStatusOverrides((previous) => ({
+                              ...previous,
+                              [rowKey]: nextStatus,
+                            }))
+                          }
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#e2e8f0] text-[#475569] transition hover:bg-[#fff7ed] hover:text-[#c2410c]"
+                          title={
+                            isOnlineStatus(agent.status)
+                              ? "Mark as inactive"
+                              : "Mark as active"
+                          }
+                          aria-label={`Toggle status for ${agent.name}`}
+                        >
+                          <Power className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="divide-y divide-[#eef1f7] bg-white md:hidden">
+              {pagedAgents.map((agent, index) => {
+                const rowKey = getAgentRowKey(agent, index);
+                const modelName = agent.modelName || agent.model_id || "-";
+                const providerValue = agent.modelProvider || "-";
+                const providerIcon = getProviderIconSrc(agent.modelProvider);
+                const createdAt = formatDateTime(agent.created_at);
+                const updatedAt = formatDateTime(agent.updated_at);
+                const statusLabel = formatStatusLabel(agent.status);
+                const statusTone = getStatusTone(agent.status);
+                const nextStatus = isOnlineStatus(agent.status)
+                  ? "inactive"
+                  : "active";
+                return (
+                  <div
+                    key={`mobile-row-${rowKey}`}
+                    className="space-y-3 px-4 py-4 text-sm text-[#2b3341]"
                   >
-                    <span
-                      className={`h-2.5 w-2.5 rounded-full ${
-                        isOnline ? "bg-[#16a34a]" : "bg-[#f59e0b]"
-                      }`}
-                    />
-                    {isOnline ? "Online" : "Offline"}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!isMuleAgent) {
-                          return;
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-base font-semibold text-[#0f172a]">
+                          {agent.name || "-"}
+                        </p>
+                        <p className="mt-1 text-xs text-[#64748b]">
+                          {createdAt} updated {updatedAt}
+                        </p>
+                      </div>
+                      <span
+                        className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone.bg} ${statusTone.text} ${statusTone.border}`}
+                      >
+                        <span className={`h-2 w-2 rounded-full ${statusTone.dot}`} />
+                        {statusLabel}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">
+                        Description
+                      </p>
+                      <div className="mt-1">
+                        {renderTruncatedText(agent.description, `mobile-desc-${rowKey}`)}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-[#e6ebf5] bg-[#f8fafc] px-3 py-2">
+                      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">
+                        Model
+                      </p>
+                      <div className="mt-2 inline-flex max-w-full items-center gap-3">
+                        {providerIcon ? (
+                          <Image
+                            src={providerIcon}
+                            alt={`${providerValue} logo`}
+                            width={20}
+                            height={20}
+                            className="h-5 w-5 flex-none object-contain"
+                          />
+                        ) : (
+                          <span className="h-5 w-5 flex-none rounded-full bg-[#e2e8f0]" />
+                        )}
+                        <span className="min-w-0 text-left">
+                          <span className="block truncate font-semibold text-[#0f172a]">
+                            {modelName}
+                          </span>
+                          <span className="block truncate text-[11px] uppercase tracking-[0.08em] text-[#64748b]">
+                            {providerValue}
+                          </span>
+                        </span>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">
+                        Instructions
+                      </p>
+                      <div className="mt-1">
+                        {renderTruncatedText(
+                          agent.instruction,
+                          `mobile-instruction-${rowKey}`
+                        )}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setViewTarget(agent)}
+                        className="inline-flex items-center justify-center gap-1 rounded-lg border border-[#dce3f1] px-3 py-2 text-xs font-semibold text-[#334155] transition hover:bg-[#eef2ff] hover:text-[#4f49e2]"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        View
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditTarget(agent)}
+                        className="inline-flex items-center justify-center gap-1 rounded-lg border border-[#dce3f1] px-3 py-2 text-xs font-semibold text-[#334155] transition hover:bg-[#eef2ff] hover:text-[#4f49e2]"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setStatusOverrides((previous) => ({
+                            ...previous,
+                            [rowKey]: nextStatus,
+                          }))
                         }
-                        setEditTarget(agent);
-                      }}
-                      disabled={!isMuleAgent}
-                      className={`flex h-8 w-8 items-center justify-center rounded-lg ${
-                        isMuleAgent
-                          ? "bg-[#e5e7eb] text-[#111827]"
-                          : "cursor-not-allowed bg-[#f3f4f6] text-[#9ca3af]"
-                      }`}
-                    >
-                      <Settings className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (isOnline) {
-                          return;
-                        }
-                        setDeleteTarget(agent);
-                        setDeleteError("");
-                      }}
-                      disabled={isOnline}
-                      className={`flex h-8 w-8 items-center justify-center rounded-lg ${
-                        isOnline
-                          ? "cursor-not-allowed bg-[#f3f4f6] text-[#9ca3af]"
-                          : "bg-[#ffe4e6] text-[#ef4444]"
-                      }`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                        className="inline-flex items-center justify-center gap-1 rounded-lg border border-[#dce3f1] px-3 py-2 text-xs font-semibold text-[#334155] transition hover:bg-[#fff7ed] hover:text-[#c2410c]"
+                      >
+                        <Power className="h-3.5 w-3.5" />
+                        {isOnlineStatus(agent.status) ? "Disable" : "Enable"}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
             </div>
             {totalPages > 1 ? (
               <div className="flex items-center justify-between border-t border-[#eef1f7] bg-white px-4 py-3 text-sm text-[#6b7280]">
@@ -1028,6 +1484,102 @@ export default function AgentRegistry({
           </>
         )}
       </div>
+
+      {viewTarget ? (
+        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/30 px-4 py-8">
+          <div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_-30px_rgba(15,23,42,0.6)]">
+            <div className="flex items-center justify-between border-b border-[#eef1f7] px-6 py-4">
+              <h4 className="text-lg font-semibold text-[#0f172a]">
+                Agent details
+              </h4>
+              <button
+                type="button"
+                onClick={() => setViewTarget(null)}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f1f5f9] text-[#0f172a]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-5 px-6 py-5 text-sm text-[#334155]">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">
+                    Name
+                  </p>
+                  <p className="mt-1 font-semibold text-[#0f172a]">
+                    {viewTarget.name || "-"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">
+                    Status
+                  </p>
+                  <p className="mt-1 font-semibold text-[#0f172a]">
+                    {formatStatusLabel(viewTarget.status)}
+                  </p>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">
+                  Description
+                </p>
+                <p className="mt-1 break-words whitespace-normal">
+                  {viewTarget.description || "-"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">
+                  Instructions
+                </p>
+                <p className="mt-1 break-words whitespace-normal">
+                  {viewTarget.instruction || "-"}
+                </p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">
+                    Model
+                  </p>
+                  <p className="mt-1 break-words whitespace-normal">
+                    {viewTarget.modelName || viewTarget.model_id || "-"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">
+                    Provider
+                  </p>
+                  <p className="mt-1 break-words whitespace-normal">
+                    {viewTarget.modelProvider || "-"}
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">
+                    Created at
+                  </p>
+                  <p className="mt-1">{formatDateTime(viewTarget.created_at)}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">
+                    Updated at
+                  </p>
+                  <p className="mt-1">{formatDateTime(viewTarget.updated_at)}</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-end border-t border-[#eef1f7] px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setViewTarget(null)}
+                className="rounded-xl border border-[#dce3f1] px-5 py-2 text-sm font-semibold text-[#334155] hover:bg-[#f8fafc]"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {deleteTarget ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 py-8">
