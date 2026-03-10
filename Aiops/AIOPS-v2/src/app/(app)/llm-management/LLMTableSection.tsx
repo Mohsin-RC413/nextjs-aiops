@@ -12,7 +12,7 @@ import {
   type LLMRecord,
 } from "./llmHelpers";
 
-const SORTABLE_HEADERS = ["model_id", "provider", "created_at"] as const;
+const SORTABLE_HEADERS = ["provider", "created_at", "name"] as const;
 type SortableHeader = (typeof SORTABLE_HEADERS)[number];
 
 type LLMTableSectionProps = {
@@ -43,6 +43,8 @@ export default function LLMTableSection({
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const columnMenuRef = useRef<HTMLDivElement | null>(null);
+  const getHeaderLabel = (header: string) =>
+    header === "name" ? "Model Name" : formatHeaderLabel(header);
 
   const tableHeaders = useMemo(() => {
     const headerSet = new Set<string>();
@@ -50,13 +52,8 @@ export default function LLMTableSection({
       Object.keys(item).forEach((key) => headerSet.add(key));
     });
 
-    const preferredOrder = [
-      "model_id",
-      "provider",
-      "name",
-      "created_at",
-      "description",
-    ];
+    headerSet.delete("model_id");
+    const preferredOrder = ["name", "provider", "created_at", "description"];
     const ordered = preferredOrder.filter((key) => headerSet.has(key));
     const extras = Array.from(headerSet).filter(
       (key) => !preferredOrder.includes(key)
@@ -84,6 +81,10 @@ export default function LLMTableSection({
     () => tableHeaders.filter((header) => !hiddenHeaders[header]),
     [tableHeaders, hiddenHeaders]
   );
+  const loadingHeaders =
+    visibleHeaders.length > 0
+      ? visibleHeaders
+      : ["name", "provider", "created_at", "description"];
 
   const handleToggleHeader = (header: string) => {
     const currentlyVisible = visibleHeaders.includes(header);
@@ -229,7 +230,7 @@ export default function LLMTableSection({
                           className="h-4 w-4 rounded border-[#d1d5db] text-[#4f49e2] focus:ring-[#c7c4f7]"
                         />
                         <span className="break-words whitespace-normal font-medium uppercase tracking-[0.06em]">
-                          {formatHeaderLabel(header)}
+                          {getHeaderLabel(header)}
                         </span>
                       </label>
                     );
@@ -243,11 +244,57 @@ export default function LLMTableSection({
 
       <div className="mt-6 overflow-x-auto rounded-2xl border border-[#eef1f7]">
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center gap-3 bg-white px-6 py-12 text-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#eef2ff] text-[#4f49e2] shadow-[0_12px_24px_-20px_rgba(79,73,226,0.8)]">
-              <Loader2 className="h-6 w-6 animate-spin" />
+          <div className="bg-white">
+            <div
+              className="grid divide-x divide-[#d7e0ee] bg-[#f3f6fb] px-4 py-3 text-xs font-semibold text-[#111827]"
+              style={{
+                gridTemplateColumns: `repeat(${loadingHeaders.length}, minmax(0, 1fr)) 96px`,
+              }}
+            >
+              {loadingHeaders.map((header) => (
+                <span
+                  key={`loading-header-${header}`}
+                  className="px-3 break-words whitespace-normal uppercase tracking-[0.08em]"
+                >
+                  {getHeaderLabel(header)}
+                </span>
+              ))}
+              <span className="px-3 break-words whitespace-normal text-right uppercase tracking-[0.08em]">
+                Action
+              </span>
             </div>
-            <p className="text-sm text-[#6b7280]">Loading LLMs...</p>
+            <div className="hidden divide-y divide-[#eef1f7] md:block">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div
+                  key={`desktop-skeleton-${index}`}
+                  className="grid animate-pulse items-center divide-x divide-[#e8eef7] px-4 py-4"
+                  style={{
+                    gridTemplateColumns: `repeat(${loadingHeaders.length}, minmax(0, 1fr)) 96px`,
+                  }}
+                >
+                  {loadingHeaders.map((header) => (
+                    <span
+                      key={`desktop-skeleton-cell-${index}-${header}`}
+                      className="mx-3 h-4 rounded bg-[#edf2f9]"
+                    />
+                  ))}
+                  <span className="ml-auto mr-3 h-8 w-10 rounded-lg bg-[#edf2f9]" />
+                </div>
+              ))}
+            </div>
+            <div className="divide-y divide-[#eef1f7] md:hidden">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <div
+                  key={`mobile-skeleton-${index}`}
+                  className="animate-pulse space-y-3 px-4 py-4"
+                >
+                  <div className="h-4 w-2/5 rounded bg-[#edf2f9]" />
+                  <div className="h-3 w-full rounded bg-[#edf2f9]" />
+                  <div className="h-3 w-4/5 rounded bg-[#edf2f9]" />
+                  <div className="h-8 w-full rounded-xl bg-[#edf2f9]" />
+                </div>
+              ))}
+            </div>
           </div>
         ) : loadError ? (
           <div className="flex flex-col items-center justify-center gap-3 bg-white px-6 py-12 text-center">
@@ -271,7 +318,7 @@ export default function LLMTableSection({
         ) : (
           <div className="min-w-[1100px]">
             <div
-              className="sticky top-0 z-10 grid bg-[#f3f6fb] px-4 py-3 text-xs font-semibold text-[#111827]"
+              className="sticky top-0 z-10 grid divide-x divide-[#d7e0ee] bg-[#f3f6fb] px-4 py-3 text-xs font-semibold text-[#111827]"
               style={{
                 gridTemplateColumns: `repeat(${visibleHeaders.length}, minmax(0, 1fr)) 96px`,
               }}
@@ -281,9 +328,9 @@ export default function LLMTableSection({
                   return (
                     <span
                       key={header}
-                      className="break-words whitespace-normal uppercase tracking-[0.08em]"
+                      className="px-3 break-words whitespace-normal uppercase tracking-[0.08em]"
                     >
-                      {formatHeaderLabel(header)}
+                      {getHeaderLabel(header)}
                     </span>
                   );
                 }
@@ -293,9 +340,9 @@ export default function LLMTableSection({
                     key={header}
                     type="button"
                     onClick={() => handleSort(header)}
-                    className="inline-flex items-center gap-1 break-words whitespace-normal text-left uppercase tracking-[0.08em] text-[#111827] transition hover:text-[#4f49e2]"
+                    className="inline-flex items-center gap-1 px-3 break-words whitespace-normal text-left uppercase tracking-[0.08em] text-[#111827] transition hover:text-[#4f49e2]"
                   >
-                    {formatHeaderLabel(header)}
+                    {getHeaderLabel(header)}
                     <ChevronDown
                       className={`h-3.5 w-3.5 transition ${
                         isActiveSort
@@ -306,7 +353,7 @@ export default function LLMTableSection({
                   </button>
                 );
               })}
-              <span className="break-words whitespace-normal text-right uppercase tracking-[0.08em]">
+              <span className="px-3 break-words whitespace-normal text-right uppercase tracking-[0.08em]">
                 Action
               </span>
             </div>
@@ -317,7 +364,7 @@ export default function LLMTableSection({
                 return (
                   <div
                     key={rowKey}
-                    className="grid items-center px-4 py-4 text-sm text-[#2b3341] transition-colors hover:bg-[#f8f9fd]"
+                    className="grid items-center divide-x divide-[#e8eef7] px-4 py-4 text-sm text-[#2b3341] transition-colors hover:bg-[#f8f9fd]"
                     style={{
                       gridTemplateColumns: `repeat(${visibleHeaders.length}, minmax(0, 1fr)) 96px`,
                     }}
@@ -327,7 +374,7 @@ export default function LLMTableSection({
                         return (
                           <span
                             key={`${header}-${index}`}
-                            className="max-w-[360px] break-all whitespace-normal font-semibold text-[#1c2330]"
+                            className="max-w-[360px] px-3 break-all whitespace-normal font-semibold text-[#1c2330]"
                             title={modelId}
                           >
                             {modelId}
@@ -339,15 +386,15 @@ export default function LLMTableSection({
                         const providerValue = formatCellValue(item[header]);
                         const providerIcon = getProviderIconSrc(item[header]);
                         return (
-                          <span key={`${header}-${index}`}>
-                            <span className="inline-flex max-w-full items-center gap-2 rounded-full bg-[#f4f6fb] px-2.5 py-1">
+                          <span key={`${header}-${index}`} className="px-3">
+                            <span className="inline-flex max-w-full items-center gap-2.5">
                               {providerIcon ? (
                                 <Image
                                   src={providerIcon}
                                   alt={`${providerValue} logo`}
-                                  width={16}
-                                  height={16}
-                                  className="h-4 w-4 object-contain"
+                                  width={22}
+                                  height={22}
+                                  className="h-[22px] w-[22px] object-contain"
                                 />
                               ) : null}
                               <span className="break-words whitespace-normal">
@@ -364,7 +411,7 @@ export default function LLMTableSection({
                           return (
                             <span
                               key={`${header}-${index}`}
-                              className={`${headerIndex === 0 ? "font-semibold text-[#1c2330]" : "text-[#2b3341]"} break-words whitespace-normal`}
+                              className={`${headerIndex === 0 ? "font-semibold text-[#1c2330]" : "text-[#2b3341]"} px-3 break-words whitespace-normal`}
                               title={`${formattedDate}${rawValue !== "-" ? ` (${rawValue})` : ""}`}
                             >
                               {formattedDate}
@@ -376,7 +423,7 @@ export default function LLMTableSection({
                         return (
                           <span
                             key={`${header}-${index}`}
-                            className="break-words whitespace-normal text-[#2b3341]"
+                            className="px-3 break-words whitespace-normal text-[#2b3341]"
                             title={formatCellValue(item[header])}
                           >
                             {formatCellValue(item[header])}
@@ -387,14 +434,14 @@ export default function LLMTableSection({
                         return (
                           <span
                             key={`${header}-${index}`}
-                            className={`${headerIndex === 0 ? "font-semibold text-[#1c2330]" : "text-[#2b3341]"} break-words whitespace-normal`}
+                            className={`${headerIndex === 0 ? "font-semibold text-[#1c2330]" : "text-[#2b3341]"} px-3 break-words whitespace-normal`}
                             title={formatCellValue(item[header])}
                           >
                             {formatCellValue(item[header])}
                         </span>
                       );
                     })}
-                    <div className="flex justify-end">
+                    <div className="flex justify-end px-3">
                       <button
                         type="button"
                         onClick={() => {
@@ -439,11 +486,10 @@ export default function LLMTableSection({
             </div>
             <div className="px-6 py-5">
               <p className="text-sm text-[#374151]">
-                Are you sure you want to delete{" "}
-                <span className="rounded-md bg-[#fee2e2] px-2 py-0.5 font-semibold text-[#b91c1c]">
-                  {formatCellValue(deleteTarget.model_id)}
-                </span>
-                ?
+                Are you sure you want to delete this model?
+              </p>
+              <p className="mt-2 max-w-full break-all rounded-md bg-[#fee2e2] px-2 py-1 font-semibold text-[#b91c1c]">
+                {formatCellValue(deleteTarget.model_id)}
               </p>
               <p className="mt-3 text-xs text-[#9b1c1c]">
                 This action cannot be undone.
