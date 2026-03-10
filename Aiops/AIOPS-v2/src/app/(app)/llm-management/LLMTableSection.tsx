@@ -228,7 +228,7 @@ export default function LLMTableSection({
                           onChange={() => handleToggleHeader(header)}
                           className="h-4 w-4 rounded border-[#d1d5db] text-[#4f49e2] focus:ring-[#c7c4f7]"
                         />
-                        <span className="truncate font-medium uppercase tracking-[0.06em]">
+                        <span className="break-words whitespace-normal font-medium uppercase tracking-[0.06em]">
                           {formatHeaderLabel(header)}
                         </span>
                       </label>
@@ -279,7 +279,10 @@ export default function LLMTableSection({
               {visibleHeaders.map((header) => {
                 if (!isSortableHeader(header)) {
                   return (
-                    <span key={header} className="uppercase tracking-[0.08em]">
+                    <span
+                      key={header}
+                      className="break-words whitespace-normal uppercase tracking-[0.08em]"
+                    >
                       {formatHeaderLabel(header)}
                     </span>
                   );
@@ -290,7 +293,7 @@ export default function LLMTableSection({
                     key={header}
                     type="button"
                     onClick={() => handleSort(header)}
-                    className="inline-flex items-center gap-1 text-left uppercase tracking-[0.08em] text-[#111827] transition hover:text-[#4f49e2]"
+                    className="inline-flex items-center gap-1 break-words whitespace-normal text-left uppercase tracking-[0.08em] text-[#111827] transition hover:text-[#4f49e2]"
                   >
                     {formatHeaderLabel(header)}
                     <ChevronDown
@@ -303,7 +306,9 @@ export default function LLMTableSection({
                   </button>
                 );
               })}
-              <span className="text-right uppercase tracking-[0.08em]">Action</span>
+              <span className="break-words whitespace-normal text-right uppercase tracking-[0.08em]">
+                Action
+              </span>
             </div>
             <div className="divide-y divide-[#eef1f7] bg-white">
               {sortedLlms.map((item, index) => {
@@ -345,7 +350,9 @@ export default function LLMTableSection({
                                   className="h-4 w-4 object-contain"
                                 />
                               ) : null}
-                              <span className="truncate">{providerValue}</span>
+                              <span className="break-words whitespace-normal">
+                                {providerValue}
+                              </span>
                             </span>
                           </span>
                         );
@@ -354,15 +361,15 @@ export default function LLMTableSection({
                       if (header === "created_at") {
                         const rawValue = formatCellValue(item[header]);
                         const formattedDate = formatDateTime(item[header]);
-                        return (
-                          <span
-                            key={`${header}-${index}`}
-                            className={`${headerIndex === 0 ? "font-semibold text-[#1c2330]" : "text-[#2b3341]"} truncate`}
-                            title={`${formattedDate}${rawValue !== "-" ? ` (${rawValue})` : ""}`}
-                          >
-                            {formattedDate}
-                          </span>
-                        );
+                          return (
+                            <span
+                              key={`${header}-${index}`}
+                              className={`${headerIndex === 0 ? "font-semibold text-[#1c2330]" : "text-[#2b3341]"} break-words whitespace-normal`}
+                              title={`${formattedDate}${rawValue !== "-" ? ` (${rawValue})` : ""}`}
+                            >
+                              {formattedDate}
+                            </span>
+                          );
                       }
 
                       if (header === "description") {
@@ -377,13 +384,13 @@ export default function LLMTableSection({
                         );
                       }
 
-                      return (
-                        <span
-                          key={`${header}-${index}`}
-                          className={`${headerIndex === 0 ? "font-semibold text-[#1c2330]" : "text-[#2b3341]"} truncate`}
-                          title={formatCellValue(item[header])}
-                        >
-                          {formatCellValue(item[header])}
+                        return (
+                          <span
+                            key={`${header}-${index}`}
+                            className={`${headerIndex === 0 ? "font-semibold text-[#1c2330]" : "text-[#2b3341]"} break-words whitespace-normal`}
+                            title={formatCellValue(item[header])}
+                          >
+                            {formatCellValue(item[header])}
                         </span>
                       );
                     })}
