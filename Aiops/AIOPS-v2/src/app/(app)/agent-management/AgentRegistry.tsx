@@ -4,6 +4,7 @@ import {
   Bot,
   BookOpen,
   ChevronDown,
+  Copy,
   Eye,
   ListChecks,
   Pencil,
@@ -430,12 +431,41 @@ export default function AgentRegistry({
     };
   };
 
+  const handleCopyText = async (
+    label: string,
+    value: string | null | undefined
+  ) => {
+    const text = value?.trim() ?? "";
+    if (!text) {
+      setToastMessage(`No ${label.toLowerCase()} available to copy.`);
+      setIsToastVisible(true);
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setToastMessage(`${label} copied.`);
+      setIsToastVisible(true);
+    } catch {
+      setToastMessage(`Unable to copy ${label.toLowerCase()}.`);
+      setIsToastVisible(true);
+    }
+  };
+
   const pageSize = 6;
   const totalPages = Math.max(1, Math.ceil(sortedAgents.length / pageSize));
   const pagedAgents = sortedAgents.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   );
+  const viewRowKey = viewTarget ? getAgentRowKey(viewTarget, 0) : null;
+  const viewStatusLabel = formatStatusLabel(viewTarget?.status);
+  const viewStatusTone = getStatusTone(viewTarget?.status);
+  const viewNextStatus: "active" | "inactive" =
+    viewTarget && isOnlineStatus(viewTarget.status) ? "inactive" : "active";
+  const viewModelName = viewTarget?.modelName || viewTarget?.model_id || "-";
+  const viewProvider = viewTarget?.modelProvider || "-";
+  const viewProviderIcon = getProviderIconSrc(viewTarget?.modelProvider);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -815,11 +845,11 @@ export default function AgentRegistry({
     nextStatus: "active" | "inactive"
   ) => {
     if (updatingStatusRowKey) {
-      return;
+      return false;
     }
     if (!agent.agent_id) {
       setStatusUpdateError("Agent ID is missing. Unable to update status.");
-      return;
+      return false;
     }
 
     setUpdatingStatusRowKey(rowKey);
@@ -847,7 +877,7 @@ export default function AgentRegistry({
 
       if (!response.ok) {
         setStatusUpdateError(getErrorMessage(data, "Unable to update status."));
-        return;
+        return false;
       }
 
       setToastMessage(
@@ -857,8 +887,10 @@ export default function AgentRegistry({
       );
       setIsToastVisible(true);
       await onStatusUpdateSuccess?.();
+      return true;
     } catch {
       setStatusUpdateError("Unable to update status.");
+      return false;
     } finally {
       setUpdatingStatusRowKey(null);
     }
@@ -1374,28 +1406,6 @@ export default function AgentRegistry({
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setViewTarget(agent);
-                                  setOpenActionMenuKey(null);
-                                }}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#334155] hover:bg-[#eef2ff] hover:text-[#4f49e2]"
-                              >
-                                <Eye className="h-4 w-4" />
-                                View
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditTarget(agent);
-                                  setOpenActionMenuKey(null);
-                                }}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#334155] hover:bg-[#eef2ff] hover:text-[#4f49e2]"
-                              >
-                                <Pencil className="h-4 w-4" />
-                                Edit
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
                                   handleToggleAgentEnabled(agent, rowKey, nextStatus);
                                   setOpenActionMenuKey(null);
                                 }}
@@ -1532,28 +1542,6 @@ export default function AgentRegistry({
                           <button
                             type="button"
                             onClick={() => {
-                              setViewTarget(agent);
-                              setOpenActionMenuKey(null);
-                            }}
-                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#334155] hover:bg-[#eef2ff] hover:text-[#4f49e2]"
-                          >
-                            <Eye className="h-4 w-4" />
-                            View
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditTarget(agent);
-                              setOpenActionMenuKey(null);
-                            }}
-                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#334155] hover:bg-[#eef2ff] hover:text-[#4f49e2]"
-                          >
-                            <Pencil className="h-4 w-4" />
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
                               handleToggleAgentEnabled(agent, rowKey, nextStatus);
                               setOpenActionMenuKey(null);
                             }}
@@ -1625,11 +1613,16 @@ export default function AgentRegistry({
 
       {viewTarget ? (
         <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/30 px-4 py-8">
-          <div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_-30px_rgba(15,23,42,0.6)]">
+          <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_-30px_rgba(15,23,42,0.6)]">
             <div className="flex items-center justify-between border-b border-[#eef1f7] px-6 py-4">
-              <h4 className="text-lg font-semibold text-[#0f172a]">
-                Agent details
-              </h4>
+              <div>
+                <h4 className="text-lg font-semibold text-[#0f172a]">
+                  Agent details
+                </h4>
+                <p className="mt-1 text-sm text-[#64748b]">
+                  Overview, model mapping, and lifecycle information.
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => setViewTarget(null)}
@@ -1638,75 +1631,234 @@ export default function AgentRegistry({
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="space-y-5 px-6 py-5 text-sm text-[#334155]">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
+            <div className="flex-1 overflow-y-auto px-6 py-5 text-sm text-[#334155]">
+              <div className="space-y-4">
+                <section className="rounded-2xl border border-[#e6ebf5] bg-[#f8fbff] p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">
+                        Name
+                      </p>
+                      <p className="mt-1 break-words text-xl font-semibold text-[#0f172a]">
+                        {viewTarget.name || "-"}
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">
+                          Agent ID
+                        </span>
+                        <span className="max-w-full break-all rounded-md bg-white px-2 py-1 text-xs font-semibold text-[#334155] ring-1 ring-[#dce3f1]">
+                          {viewTarget.agent_id || "-"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleCopyText("Agent ID", viewTarget.agent_id)
+                          }
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-[#dce3f1] text-[#64748b] transition hover:bg-white hover:text-[#4f49e2]"
+                          aria-label="Copy Agent ID"
+                          title="Copy Agent ID"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                    <span
+                      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold ${viewStatusTone.bg} ${viewStatusTone.text} ${viewStatusTone.border}`}
+                    >
+                      <span className={`h-2.5 w-2.5 rounded-full ${viewStatusTone.dot}`} />
+                      {viewStatusLabel}
+                    </span>
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-[#e6ebf5] bg-white p-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">
-                    Name
+                    Overview
                   </p>
-                  <p className="mt-1 font-semibold text-[#0f172a]">
-                    {viewTarget.name || "-"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">
-                    Status
-                  </p>
-                  <p className="mt-1 font-semibold text-[#0f172a]">
-                    {formatStatusLabel(viewTarget.status)}
-                  </p>
-                </div>
-              </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">
-                  Description
-                </p>
-                <p className="mt-1 break-words whitespace-normal">
-                  {viewTarget.description || "-"}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">
-                  Instructions
-                </p>
-                <p className="mt-1 break-words whitespace-normal">
-                  {viewTarget.instruction || "-"}
-                </p>
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
+                  <div className="mt-3 grid gap-4 md:grid-cols-2">
+                    <div className="rounded-xl border border-[#edf1f7] bg-[#fcfdff] p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">
+                        Description
+                      </p>
+                      <p className="mt-2 break-words whitespace-normal text-[#2b3341]">
+                        {viewTarget.description || "-"}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-[#edf1f7] bg-[#fcfdff] p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">
+                          Instructions
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleCopyText("Instructions", viewTarget.instruction)
+                          }
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-[#dce3f1] text-[#64748b] transition hover:bg-white hover:text-[#4f49e2]"
+                          aria-label="Copy Instructions"
+                          title="Copy Instructions"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      <p className="mt-2 break-all whitespace-normal text-[#2b3341]">
+                        {viewTarget.instruction || "-"}
+                      </p>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-[#e6ebf5] bg-white p-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">
                     Model
                   </p>
-                  <p className="mt-1 break-words whitespace-normal">
-                    {viewTarget.modelName || viewTarget.model_id || "-"}
-                  </p>
-                </div>
-                <div>
+                  <div className="mt-3 grid gap-4 md:grid-cols-2">
+                    <div className="rounded-xl border border-[#edf1f7] bg-[#fcfdff] p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">
+                          Model Name
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyText("Model name", viewModelName)}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-[#dce3f1] text-[#64748b] transition hover:bg-white hover:text-[#4f49e2]"
+                          aria-label="Copy Model Name"
+                          title="Copy Model Name"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      <div className="mt-2 inline-flex max-w-full items-start gap-3">
+                        {viewProviderIcon ? (
+                          <Image
+                            src={viewProviderIcon}
+                            alt={`${viewProvider} logo`}
+                            width={22}
+                            height={22}
+                            className="mt-0.5 h-[22px] w-[22px] flex-none object-contain"
+                          />
+                        ) : (
+                          <span className="mt-0.5 h-[22px] w-[22px] flex-none rounded-full bg-[#e2e8f0]" />
+                        )}
+                        <span className="min-w-0 break-all font-semibold text-[#0f172a]">
+                          {viewModelName}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-[#edf1f7] bg-[#fcfdff] p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">
+                          Provider
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyText("Provider", viewProvider)}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-[#dce3f1] text-[#64748b] transition hover:bg-white hover:text-[#4f49e2]"
+                          aria-label="Copy Provider"
+                          title="Copy Provider"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      <div className="mt-2 inline-flex max-w-full items-center gap-3">
+                        {viewProviderIcon ? (
+                          <Image
+                            src={viewProviderIcon}
+                            alt={`${viewProvider} logo`}
+                            width={22}
+                            height={22}
+                            className="h-[22px] w-[22px] flex-none object-contain"
+                          />
+                        ) : (
+                          <span className="h-[22px] w-[22px] flex-none rounded-full bg-[#e2e8f0]" />
+                        )}
+                        <span className="break-all text-[#2b3341]">{viewProvider}</span>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-[#e6ebf5] bg-white p-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">
-                    Provider
+                    Lifecycle
                   </p>
-                  <p className="mt-1 break-words whitespace-normal">
-                    {viewTarget.modelProvider || "-"}
-                  </p>
-                </div>
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">
-                    Created at
-                  </p>
-                  <p className="mt-1">{formatDateTime(viewTarget.created_at)}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">
-                    Updated at
-                  </p>
-                  <p className="mt-1">{formatDateTime(viewTarget.updated_at)}</p>
-                </div>
+                  <div className="mt-3 grid gap-4 md:grid-cols-2">
+                    <div className="rounded-xl border border-[#edf1f7] bg-[#fcfdff] p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">
+                        Created at
+                      </p>
+                      <p className="mt-2 text-[#2b3341]">
+                        {formatDateTime(viewTarget.created_at)}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-[#edf1f7] bg-[#fcfdff] p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">
+                        Updated at
+                      </p>
+                      <p className="mt-2 text-[#2b3341]">
+                        {formatDateTime(viewTarget.updated_at)}
+                      </p>
+                    </div>
+                  </div>
+                </section>
               </div>
             </div>
-            <div className="flex items-center justify-end border-t border-[#eef1f7] px-6 py-4">
+            <div className="flex flex-wrap items-center justify-end gap-3 border-t border-[#eef1f7] px-6 py-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditTarget(viewTarget);
+                  setViewTarget(null);
+                }}
+                className="inline-flex items-center gap-2 rounded-xl border border-[#dce3f1] px-4 py-2 text-sm font-semibold text-[#334155] transition hover:bg-[#eef2ff] hover:text-[#4f49e2]"
+              >
+                <Pencil className="h-4 w-4" />
+                Edit
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!viewRowKey) {
+                    return;
+                  }
+                  const didUpdate = await handleToggleAgentEnabled(
+                    viewTarget,
+                    viewRowKey,
+                    viewNextStatus
+                  );
+                  if (didUpdate) {
+                    setViewTarget((previous) =>
+                      previous
+                        ? {
+                            ...previous,
+                            status: viewNextStatus,
+                          }
+                        : previous
+                    );
+                  }
+                }}
+                disabled={viewRowKey ? updatingStatusRowKey === viewRowKey : false}
+                className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition ${
+                  viewRowKey && updatingStatusRowKey === viewRowKey
+                    ? "cursor-not-allowed border-[#e5e7eb] text-[#94a3b8]"
+                    : "border-[#f8d3ad] text-[#c2410c] hover:bg-[#fff7ed]"
+                }`}
+              >
+                <Power className="h-4 w-4" />
+                {isOnlineStatus(viewTarget.status) ? "Disable" : "Enable"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteTarget(viewTarget);
+                  setDeleteError("");
+                  setViewTarget(null);
+                }}
+                className="inline-flex items-center gap-2 rounded-xl border border-[#fecdd3] px-4 py-2 text-sm font-semibold text-[#b91c1c] transition hover:bg-[#fff1f2]"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete
+              </button>
               <button
                 type="button"
                 onClick={() => setViewTarget(null)}
